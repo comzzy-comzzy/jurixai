@@ -130,7 +130,7 @@ function CreateHackathon() {
                   className="col-span-4 bg-background border border-border-dim px-2 py-1 text-xs font-mono uppercase tracking-widest text-ai focus:outline-none focus:border-accent"
                 >
                   {judges.map((j) => (
-                    <option key={j.id} value={j.id}>{j.name.toUpperCase()} — {j.focus}</option>
+                    <option key={j.name} value={j.name}>{j.name.toUpperCase()} — {j.focus}</option>
                   ))}
                 </select>
                 <input
