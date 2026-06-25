@@ -17,11 +17,11 @@ type Criterion = { id: string; name: string; description: string; weight: number
 function CreateHackathon() {
   const [step, setStep] = useState(0);
   const [criteria, setCriteria] = useState<Criterion[]>([
-    { id: "c1", name: "Technical Quality", description: "", weight: 30, assignedJudge: "lexi" },
-    { id: "c2", name: "Originality", description: "", weight: 25, assignedJudge: "mira" },
-    { id: "c3", name: "User Experience", description: "", weight: 20, assignedJudge: "aris" },
-    { id: "c4", name: "Demo Polish", description: "", weight: 15, assignedJudge: "nova" },
-    { id: "c5", name: "Sustainability", description: "", weight: 10, assignedJudge: "sage" },
+    { id: "c1", name: "Technical Quality", description: "", weight: 30, assignedJudge: "Lexi" },
+    { id: "c2", name: "Originality", description: "", weight: 25, assignedJudge: "Mira" },
+    { id: "c3", name: "User Experience", description: "", weight: 20, assignedJudge: "Aris" },
+    { id: "c4", name: "Demo Polish", description: "", weight: 15, assignedJudge: "Nova" },
+    { id: "c5", name: "Sustainability", description: "", weight: 10, assignedJudge: "Sage" },
   ]);
   const [done, setDone] = useState(false);
 
