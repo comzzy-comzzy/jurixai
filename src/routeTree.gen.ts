@@ -9,38 +9,139 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as HackathonsRouteImport } from './routes/hackathons'
+import { Route as CreateRouteImport } from './routes/create'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as HackathonsIdRouteImport } from './routes/hackathons.$id'
+import { Route as HackathonsIdSubmitRouteImport } from './routes/hackathons.$id.submit'
+import { Route as HackathonsIdProjectProjectIdRouteImport } from './routes/hackathons.$id.project.$projectId'
 
+const HackathonsRoute = HackathonsRouteImport.update({
+  id: '/hackathons',
+  path: '/hackathons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateRoute = CreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HackathonsIdRoute = HackathonsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => HackathonsRoute,
+} as any)
+const HackathonsIdSubmitRoute = HackathonsIdSubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
+  getParentRoute: () => HackathonsIdRoute,
+} as any)
+const HackathonsIdProjectProjectIdRoute =
+  HackathonsIdProjectProjectIdRouteImport.update({
+    id: '/project/$projectId',
+    path: '/project/$projectId',
+    getParentRoute: () => HackathonsIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/create': typeof CreateRoute
+  '/hackathons': typeof HackathonsRouteWithChildren
+  '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
+  '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/create': typeof CreateRoute
+  '/hackathons': typeof HackathonsRouteWithChildren
+  '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
+  '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/create': typeof CreateRoute
+  '/hackathons': typeof HackathonsRouteWithChildren
+  '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
+  '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/create'
+    | '/hackathons'
+    | '/hackathons/$id'
+    | '/hackathons/$id/submit'
+    | '/hackathons/$id/project/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/admin'
+    | '/create'
+    | '/hackathons'
+    | '/hackathons/$id'
+    | '/hackathons/$id/submit'
+    | '/hackathons/$id/project/$projectId'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/create'
+    | '/hackathons'
+    | '/hackathons/$id'
+    | '/hackathons/$id/submit'
+    | '/hackathons/$id/project/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
+  CreateRoute: typeof CreateRoute
+  HackathonsRoute: typeof HackathonsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/hackathons': {
+      id: '/hackathons'
+      path: '/hackathons'
+      fullPath: '/hackathons'
+      preLoaderRoute: typeof HackathonsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create': {
+      id: '/create'
+      path: '/create'
+      fullPath: '/create'
+      preLoaderRoute: typeof CreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +149,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hackathons/$id': {
+      id: '/hackathons/$id'
+      path: '/$id'
+      fullPath: '/hackathons/$id'
+      preLoaderRoute: typeof HackathonsIdRouteImport
+      parentRoute: typeof HackathonsRoute
+    }
+    '/hackathons/$id/submit': {
+      id: '/hackathons/$id/submit'
+      path: '/submit'
+      fullPath: '/hackathons/$id/submit'
+      preLoaderRoute: typeof HackathonsIdSubmitRouteImport
+      parentRoute: typeof HackathonsIdRoute
+    }
+    '/hackathons/$id/project/$projectId': {
+      id: '/hackathons/$id/project/$projectId'
+      path: '/project/$projectId'
+      fullPath: '/hackathons/$id/project/$projectId'
+      preLoaderRoute: typeof HackathonsIdProjectProjectIdRouteImport
+      parentRoute: typeof HackathonsIdRoute
+    }
   }
 }
 
+interface HackathonsIdRouteChildren {
+  HackathonsIdSubmitRoute: typeof HackathonsIdSubmitRoute
+  HackathonsIdProjectProjectIdRoute: typeof HackathonsIdProjectProjectIdRoute
+}
+
+const HackathonsIdRouteChildren: HackathonsIdRouteChildren = {
+  HackathonsIdSubmitRoute: HackathonsIdSubmitRoute,
+  HackathonsIdProjectProjectIdRoute: HackathonsIdProjectProjectIdRoute,
+}
+
+const HackathonsIdRouteWithChildren = HackathonsIdRoute._addFileChildren(
+  HackathonsIdRouteChildren,
+)
+
+interface HackathonsRouteChildren {
+  HackathonsIdRoute: typeof HackathonsIdRouteWithChildren
+}
+
+const HackathonsRouteChildren: HackathonsRouteChildren = {
+  HackathonsIdRoute: HackathonsIdRouteWithChildren,
+}
+
+const HackathonsRouteWithChildren = HackathonsRoute._addFileChildren(
+  HackathonsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
+  CreateRoute: CreateRoute,
+  HackathonsRoute: HackathonsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
