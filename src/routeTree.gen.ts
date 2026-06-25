@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as HackathonsRouteImport } from './routes/hackathons'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HackathonsIdRouteImport } from './routes/hackathons.$id'
+import { Route as HackathonsIdSubmitRouteImport } from './routes/hackathons.$id.submit'
 
 const HackathonsRoute = HackathonsRouteImport.update({
   id: '/hackathons',
@@ -28,29 +29,42 @@ const HackathonsIdRoute = HackathonsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => HackathonsRoute,
 } as any)
+const HackathonsIdSubmitRoute = HackathonsIdSubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
+  getParentRoute: () => HackathonsIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/hackathons': typeof HackathonsRouteWithChildren
-  '/hackathons/$id': typeof HackathonsIdRoute
+  '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/hackathons': typeof HackathonsRouteWithChildren
-  '/hackathons/$id': typeof HackathonsIdRoute
+  '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/hackathons': typeof HackathonsRouteWithChildren
-  '/hackathons/$id': typeof HackathonsIdRoute
+  '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/hackathons' | '/hackathons/$id'
+  fullPaths: '/' | '/hackathons' | '/hackathons/$id' | '/hackathons/$id/submit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/hackathons' | '/hackathons/$id'
-  id: '__root__' | '/' | '/hackathons' | '/hackathons/$id'
+  to: '/' | '/hackathons' | '/hackathons/$id' | '/hackathons/$id/submit'
+  id:
+    | '__root__'
+    | '/'
+    | '/hackathons'
+    | '/hackathons/$id'
+    | '/hackathons/$id/submit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -81,15 +95,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HackathonsIdRouteImport
       parentRoute: typeof HackathonsRoute
     }
+    '/hackathons/$id/submit': {
+      id: '/hackathons/$id/submit'
+      path: '/submit'
+      fullPath: '/hackathons/$id/submit'
+      preLoaderRoute: typeof HackathonsIdSubmitRouteImport
+      parentRoute: typeof HackathonsIdRoute
+    }
   }
 }
 
+interface HackathonsIdRouteChildren {
+  HackathonsIdSubmitRoute: typeof HackathonsIdSubmitRoute
+}
+
+const HackathonsIdRouteChildren: HackathonsIdRouteChildren = {
+  HackathonsIdSubmitRoute: HackathonsIdSubmitRoute,
+}
+
+const HackathonsIdRouteWithChildren = HackathonsIdRoute._addFileChildren(
+  HackathonsIdRouteChildren,
+)
+
 interface HackathonsRouteChildren {
-  HackathonsIdRoute: typeof HackathonsIdRoute
+  HackathonsIdRoute: typeof HackathonsIdRouteWithChildren
 }
 
 const HackathonsRouteChildren: HackathonsRouteChildren = {
-  HackathonsIdRoute: HackathonsIdRoute,
+  HackathonsIdRoute: HackathonsIdRouteWithChildren,
 }
 
 const HackathonsRouteWithChildren = HackathonsRoute._addFileChildren(
