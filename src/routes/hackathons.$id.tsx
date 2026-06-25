@@ -104,7 +104,7 @@ function HackathonDetail() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-dim">
-              {hackathon.criteria.map((c) => (
+              {hackathon.criteria.map((c: typeof hackathon.criteria[number]) => (
                 <tr key={c.id}>
                   <td className="p-4 font-bold text-foreground">{c.name}</td>
                   <td className="p-4 text-muted-foreground hidden md:table-cell">{c.description}</td>
