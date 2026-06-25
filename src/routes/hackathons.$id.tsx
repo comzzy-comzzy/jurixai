@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { getHackathon, getHackathonProjects, judges } from "@/lib/mock-data";
+import { getHackathon, getHackathonProjects, judges, type Hackathon } from "@/lib/mock-data";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { Countdown } from "@/components/jurix/Countdown";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
