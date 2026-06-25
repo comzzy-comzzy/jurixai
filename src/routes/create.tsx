@@ -12,7 +12,7 @@ export const Route = createFileRoute("/create")({
   component: CreateHackathon,
 });
 
-type Criterion = { id: string; name: string; description: string; weight: number; assignedJudge: typeof judges[number]["id"] };
+type Criterion = { id: string; name: string; description: string; weight: number; assignedJudge: string };
 
 function CreateHackathon() {
   const [step, setStep] = useState(0);
