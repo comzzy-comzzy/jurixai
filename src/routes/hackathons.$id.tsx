@@ -78,7 +78,7 @@ function HackathonDetail() {
         <div className="bg-background p-5">
           <p className="text-[10px] font-mono text-muted-foreground mb-2 uppercase tracking-widest">WINNER_SPLIT</p>
           <div className="flex gap-4">
-            {hackathon.winnerSplit.map((s, i) => (
+            {hackathon.winnerSplit.map((s: number, i: number) => (
               <div key={i}>
                 <p className="text-2xl font-bold tabular-nums text-accent">{s}%</p>
                 <p className="text-[10px] font-mono text-muted-foreground uppercase">#{i + 1}</p>
