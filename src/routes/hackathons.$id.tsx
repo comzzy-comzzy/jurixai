@@ -9,7 +9,7 @@ import { Leaderboard } from "@/components/jurix/Leaderboard";
 import { fullUsdc, relativeDate } from "@/lib/format";
 
 export const Route = createFileRoute("/hackathons/$id")({
-  loader: ({ params }) => {
+  loader: ({ params }): { hackathon: Hackathon } => {
     const h = getHackathon(params.id);
     if (!h) throw notFound();
     return { hackathon: h };
