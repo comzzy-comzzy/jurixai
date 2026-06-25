@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as HackathonsRouteImport } from './routes/hackathons'
 import { Route as CreateRouteImport } from './routes/create'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HackathonsIdRouteImport } from './routes/hackathons.$id'
 import { Route as HackathonsIdSubmitRouteImport } from './routes/hackathons.$id.submit'
@@ -24,6 +25,11 @@ const HackathonsRoute = HackathonsRouteImport.update({
 const CreateRoute = CreateRouteImport.update({
   id: '/create',
   path: '/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -50,6 +56,7 @@ const HackathonsIdProjectProjectIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
@@ -67,6 +75,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/create'
     | '/hackathons'
     | '/hackathons/$id'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/create'
     | '/hackathons'
     | '/hackathons/$id'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/create'
     | '/hackathons'
     | '/hackathons/$id'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   CreateRoute: typeof CreateRoute
   HackathonsRoute: typeof HackathonsRouteWithChildren
 }
@@ -120,6 +133,13 @@ declare module '@tanstack/react-router' {
       path: '/create'
       fullPath: '/create'
       preLoaderRoute: typeof CreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -181,6 +201,7 @@ const HackathonsRouteWithChildren = HackathonsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   CreateRoute: CreateRoute,
   HackathonsRoute: HackathonsRouteWithChildren,
 }
