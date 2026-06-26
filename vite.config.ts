@@ -12,4 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Deploy target: Vercel. Nitro emits the Vercel Build Output API (.vercel/output)
+  // on production builds. Inside the Lovable editor sandbox this is ignored and the
+  // build is forced back to Cloudflare automatically, so the editor preview is unaffected.
+  nitro: { preset: "vercel" },
 });
