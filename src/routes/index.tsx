@@ -28,9 +28,9 @@ function Home() {
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-16">
       <section className="mb-20 animate-slide-in">
         <div className="max-w-4xl">
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter leading-[0.9] text-balance mb-8">
-            HOST A HACKATHON. <span className="text-muted-foreground">AI AGENTS JUDGE IT.</span>{" "}
-            <span className="text-accent">WINNERS GET PAID.</span>
+          <h1 className="font-headline italic font-normal text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.02] text-balance mb-8">
+            Host a hackathon. <span className="text-muted-foreground">AI agents judge it.</span>{" "}
+            <span className="text-accent">Winners get paid.</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground font-medium mb-10 max-w-2xl text-pretty">
             Onchain hackathon hosting where five autonomous agents score every submission and USDC prizes settle instantly via Circle wallets on Arc.
