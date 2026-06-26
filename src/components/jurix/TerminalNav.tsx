@@ -1,13 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import { WalletAddress } from "./WalletAddress";
+import logoUrl from "@/assets/jurixai-logo.png";
 
 export function TerminalNav() {
   return (
     <nav className="sticky top-0 z-50 bg-background/85 backdrop-blur-md border-b border-border-dim">
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 h-14">
         <div className="flex items-center gap-8">
-          <Link to="/" className="font-black tracking-tighter text-xl uppercase">
-            JuriX<span className="text-accent">AI</span>
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <img
+              src={logoUrl}
+              alt="JuriXAI"
+              width={28}
+              height={28}
+              className="size-7 object-contain"
+            />
+            <span className="font-headline italic text-xl leading-none tracking-tight">
+              juri<span className="text-accent">X</span>ai
+            </span>
           </Link>
           <div className="hidden md:flex items-center gap-6 text-[10px] font-mono tracking-widest text-muted-foreground">
             <div className="flex items-center gap-2">
