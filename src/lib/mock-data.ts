@@ -270,12 +270,12 @@ export const projects: Project[] = [
 ];
 
 export const activityFeed = [
-  { ts: "21:04:12", judge: "Lexi", color: "ai", text: "Scoring project Hyperdrive DEX..." },
-  { ts: "21:03:55", judge: "Aris", color: "accent", text: "Completed scoring SolPay Rails (8.90)" },
-  { ts: "21:03:01", judge: "Mira", color: "warn", text: "Flagged submission #39 — repo empty" },
-  { ts: "21:02:14", judge: "Sage", color: "accent", text: "Completed scoring Lumine Identity (8.20)" },
-  { ts: "21:01:48", judge: "Nova", color: "ai", text: "Reviewing documentation for Modular DA Cache" },
-  { ts: "21:00:22", judge: "Lexi", color: "accent", text: "Completed scoring Shared Sequencer (8.60)" },
+  { ts: "21:04:12", judge: "Vex",  color: "ai",     text: "Scoring project Hyperdrive DEX..." },
+  { ts: "21:03:55", judge: "Kael", color: "accent", text: "Completed scoring SolPay Rails (8.90)" },
+  { ts: "21:03:01", judge: "Oryn", color: "warn",   text: "Flagged submission #39 — repo empty" },
+  { ts: "21:02:14", judge: "Dusk", color: "accent", text: "Completed scoring Lumine Identity (8.20)" },
+  { ts: "21:01:48", judge: "Zera", color: "ai",     text: "Reviewing documentation for Modular DA Cache" },
+  { ts: "21:00:22", judge: "Vex",  color: "accent", text: "Completed scoring Shared Sequencer (8.60)" },
 ];
 
 export const stats = {
