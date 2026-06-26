@@ -82,8 +82,8 @@ function Home() {
 
       <section className="mt-24">
         <div className="flex items-center gap-4 mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tighter">
-            Live Standings: <span className="text-accent">{leaderboardHackathon.name}</span>
+          <h2 className="text-2xl md:text-3xl font-headline italic tracking-tight">
+            Live standings: <span className="text-accent">{leaderboardHackathon.name}</span>
           </h2>
           <div className="h-px flex-1 bg-border-dim" />
           <Link
