@@ -24,7 +24,7 @@ function Admin() {
     return (
       <div className="max-w-sm mx-auto px-6 py-24">
         <p className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">RESTRICTED</p>
-        <h1 className="text-3xl font-extrabold tracking-tighter mb-6">OPERATOR_CONSOLE</h1>
+        <h1 className="text-2xl font-headline italic font-normal tracking-tight mb-6">OPERATOR_CONSOLE</h1>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -59,7 +59,7 @@ function Admin() {
     <div className="max-w-7xl mx-auto px-6 py-12">
       <header className="mb-10 border-b border-border-dim pb-6">
         <p className="text-[10px] font-mono uppercase tracking-widest text-accent mb-2">OPERATOR_CONSOLE</p>
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter">ADMIN_DASHBOARD</h1>
+        <h1 className="text-3xl md:text-4xl font-headline italic font-normal tracking-tight">ADMIN_DASHBOARD</h1>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border-dim border border-border-dim mb-10">

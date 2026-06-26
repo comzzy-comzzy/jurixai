@@ -17,11 +17,11 @@ type Criterion = { id: string; name: string; description: string; weight: number
 function CreateHackathon() {
   const [step, setStep] = useState(0);
   const [criteria, setCriteria] = useState<Criterion[]>([
-    { id: "c1", name: "Technical Quality", description: "", weight: 30, assignedJudge: "Lexi" },
-    { id: "c2", name: "Originality", description: "", weight: 25, assignedJudge: "Mira" },
-    { id: "c3", name: "User Experience", description: "", weight: 20, assignedJudge: "Aris" },
-    { id: "c4", name: "Demo Polish", description: "", weight: 15, assignedJudge: "Nova" },
-    { id: "c5", name: "Sustainability", description: "", weight: 10, assignedJudge: "Sage" },
+    { id: "c1", name: "Technical Quality", description: "", weight: 30, assignedJudge: "Vex" },
+    { id: "c2", name: "Originality",       description: "", weight: 25, assignedJudge: "Oryn" },
+    { id: "c3", name: "Architecture",      description: "", weight: 20, assignedJudge: "Kael" },
+    { id: "c4", name: "Demo Polish",       description: "", weight: 15, assignedJudge: "Zera" },
+    { id: "c5", name: "Agent Integration", description: "", weight: 10, assignedJudge: "Dusk" },
   ]);
   const [done, setDone] = useState(false);
 
@@ -47,7 +47,7 @@ function CreateHackathon() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
       <header className="mb-10">
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter mb-3">HOST_A_HACKATHON</h1>
+        <h1 className="text-3xl md:text-4xl font-headline italic font-normal tracking-tight mb-3">HOST_A_HACKATHON</h1>
         <p className="text-muted-foreground max-w-xl">
           Four steps. No human judges. Prizes settle automatically when the deadline expires.
         </p>

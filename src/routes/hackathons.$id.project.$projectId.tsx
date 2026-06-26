@@ -41,7 +41,7 @@ function ProjectDetail() {
       <header className="mt-6 mb-10 grid grid-cols-1 lg:grid-cols-12 gap-8 border-b border-border-dim pb-10">
         <div className="lg:col-span-8">
           <p className="text-[10px] font-mono uppercase tracking-widest text-ai mb-3">{project.teamName}</p>
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter mb-4">{project.name}</h1>
+          <h1 className="text-3xl md:text-5xl font-headline italic font-normal tracking-tight mb-4">{project.name}</h1>
           <p className="text-muted-foreground text-pretty mb-6">{project.description}</p>
           <div className="flex flex-wrap gap-2 text-[11px] font-mono">
             <a href={project.githubUrl} target="_blank" rel="noreferrer" className="border border-border-dim px-3 py-1.5 hover:border-accent transition-colors flex items-center gap-1.5 uppercase tracking-widest">

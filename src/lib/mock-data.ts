@@ -61,24 +61,24 @@ export interface Judge {
   status: JudgeStatus;
   reviewsToday: number;
   reviewsTotal: number;
-  color: "ai" | "accent";
+  colorHex: string;
 }
 
 export const judges: Judge[] = [
-  { name: "Lexi", initial: "LX", focus: "Engineering Quality", status: "reviewing", reviewsToday: 14, reviewsTotal: 842, color: "ai" },
-  { name: "Mira", initial: "MR", focus: "Innovation", status: "idle", reviewsToday: 9, reviewsTotal: 1102, color: "ai" },
-  { name: "Aris", initial: "AR", focus: "Architecture", status: "done", reviewsToday: 22, reviewsTotal: 954, color: "ai" },
-  { name: "Nova", initial: "NV", focus: "Documentation", status: "reviewing", reviewsToday: 5, reviewsTotal: 521, color: "ai" },
-  { name: "Sage", initial: "SG", focus: "Agent Integration", status: "idle", reviewsToday: 11, reviewsTotal: 389, color: "ai" },
+  { name: "Vex",  initial: "VX", focus: "Engineering Quality",          status: "reviewing", reviewsToday: 14, reviewsTotal: 842,  colorHex: "#00D8C8" },
+  { name: "Kael", initial: "KL", focus: "Architecture",                  status: "idle",      reviewsToday: 9,  reviewsTotal: 1102, colorHex: "#3B82F6" },
+  { name: "Oryn", initial: "OR", focus: "Innovation",                    status: "done",      reviewsToday: 22, reviewsTotal: 954,  colorHex: "#7C3AED" },
+  { name: "Zera", initial: "ZR", focus: "Documentation + Deliverables",  status: "reviewing", reviewsToday: 5,  reviewsTotal: 521,  colorHex: "#EF4444" },
+  { name: "Dusk", initial: "DK", focus: "AI / Agent Integration",        status: "idle",      reviewsToday: 11, reviewsTotal: 389,  colorHex: "#F59E0B" },
 ];
 
 export const defaultCriteria: Omit<Criterion, "id">[] = [
-  { name: "Implementation & Engineering Quality", description: "Code quality, testing, performance.", weight: 20, assignedJudge: "Lexi" },
-  { name: "Architecture & Complexity Fit", description: "System design and appropriate complexity.", weight: 16, assignedJudge: "Aris" },
-  { name: "Deliverable Completeness", description: "Working demo, complete features.", weight: 20, assignedJudge: "Lexi" },
-  { name: "Project Documentation", description: "README, setup, API docs, video.", weight: 16, assignedJudge: "Nova" },
-  { name: "AI/Agent Integration Evidence", description: "Real agent use, not buzzword.", weight: 20, assignedJudge: "Sage" },
-  { name: "Implementation Innovation", description: "Novelty of approach.", weight: 8, assignedJudge: "Mira" },
+  { name: "Implementation & Engineering Quality", description: "Code quality, testing, performance.", weight: 20, assignedJudge: "Vex" },
+  { name: "Architecture & Complexity Fit",        description: "System design and appropriate complexity.", weight: 16, assignedJudge: "Kael" },
+  { name: "Deliverable Completeness",             description: "Working demo, complete features.", weight: 20, assignedJudge: "Zera" },
+  { name: "Project Documentation",                description: "README, setup, API docs, video.", weight: 16, assignedJudge: "Zera" },
+  { name: "AI/Agent Integration Evidence",        description: "Real agent use, not buzzword.", weight: 20, assignedJudge: "Dusk" },
+  { name: "Implementation Innovation",            description: "Novelty of approach.", weight: 8,  assignedJudge: "Oryn" },
 ];
 
 function buildCriteria(hid: string): Criterion[] {
@@ -270,12 +270,12 @@ export const projects: Project[] = [
 ];
 
 export const activityFeed = [
-  { ts: "21:04:12", judge: "Lexi", color: "ai", text: "Scoring project Hyperdrive DEX..." },
-  { ts: "21:03:55", judge: "Aris", color: "accent", text: "Completed scoring SolPay Rails (8.90)" },
-  { ts: "21:03:01", judge: "Mira", color: "warn", text: "Flagged submission #39 — repo empty" },
-  { ts: "21:02:14", judge: "Sage", color: "accent", text: "Completed scoring Lumine Identity (8.20)" },
-  { ts: "21:01:48", judge: "Nova", color: "ai", text: "Reviewing documentation for Modular DA Cache" },
-  { ts: "21:00:22", judge: "Lexi", color: "accent", text: "Completed scoring Shared Sequencer (8.60)" },
+  { ts: "21:04:12", judge: "Vex",  color: "ai",     text: "Scoring project Hyperdrive DEX..." },
+  { ts: "21:03:55", judge: "Kael", color: "accent", text: "Completed scoring SolPay Rails (8.90)" },
+  { ts: "21:03:01", judge: "Oryn", color: "warn",   text: "Flagged submission #39 — repo empty" },
+  { ts: "21:02:14", judge: "Dusk", color: "accent", text: "Completed scoring Lumine Identity (8.20)" },
+  { ts: "21:01:48", judge: "Zera", color: "ai",     text: "Reviewing documentation for Modular DA Cache" },
+  { ts: "21:00:22", judge: "Vex",  color: "accent", text: "Completed scoring Shared Sequencer (8.60)" },
 ];
 
 export const stats = {

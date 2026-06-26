@@ -29,6 +29,7 @@
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
   --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Instrument Serif", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: 2px;

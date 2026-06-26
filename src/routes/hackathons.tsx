@@ -37,7 +37,7 @@ function BrowseHackathons() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <header className="mb-10">
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter mb-3">
+        <h1 className="text-3xl md:text-4xl font-headline italic font-normal tracking-tight mb-3">
           BROWSE_HACKATHONS
         </h1>
         <p className="text-muted-foreground max-w-xl">

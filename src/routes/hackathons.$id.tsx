@@ -44,7 +44,7 @@ function HackathonDetail() {
               BY {hackathon.organizerName}
             </span>
           </div>
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter mb-4">{hackathon.name}</h1>
+          <h1 className="text-3xl md:text-5xl font-headline italic font-normal tracking-tight mb-4">{hackathon.name}</h1>
           <p className="text-muted-foreground max-w-2xl text-pretty">{hackathon.description}</p>
         </div>
         {hackathon.status === "open" && (
