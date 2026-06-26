@@ -61,24 +61,24 @@ export interface Judge {
   status: JudgeStatus;
   reviewsToday: number;
   reviewsTotal: number;
-  color: "ai" | "accent";
+  colorHex: string;
 }
 
 export const judges: Judge[] = [
-  { name: "Lexi", initial: "LX", focus: "Engineering Quality", status: "reviewing", reviewsToday: 14, reviewsTotal: 842, color: "ai" },
-  { name: "Mira", initial: "MR", focus: "Innovation", status: "idle", reviewsToday: 9, reviewsTotal: 1102, color: "ai" },
-  { name: "Aris", initial: "AR", focus: "Architecture", status: "done", reviewsToday: 22, reviewsTotal: 954, color: "ai" },
-  { name: "Nova", initial: "NV", focus: "Documentation", status: "reviewing", reviewsToday: 5, reviewsTotal: 521, color: "ai" },
-  { name: "Sage", initial: "SG", focus: "Agent Integration", status: "idle", reviewsToday: 11, reviewsTotal: 389, color: "ai" },
+  { name: "Vex",  initial: "VX", focus: "Engineering Quality",          status: "reviewing", reviewsToday: 14, reviewsTotal: 842,  colorHex: "#00D8C8" },
+  { name: "Kael", initial: "KL", focus: "Architecture",                  status: "idle",      reviewsToday: 9,  reviewsTotal: 1102, colorHex: "#3B82F6" },
+  { name: "Oryn", initial: "OR", focus: "Innovation",                    status: "done",      reviewsToday: 22, reviewsTotal: 954,  colorHex: "#7C3AED" },
+  { name: "Zera", initial: "ZR", focus: "Documentation + Deliverables",  status: "reviewing", reviewsToday: 5,  reviewsTotal: 521,  colorHex: "#EF4444" },
+  { name: "Dusk", initial: "DK", focus: "AI / Agent Integration",        status: "idle",      reviewsToday: 11, reviewsTotal: 389,  colorHex: "#F59E0B" },
 ];
 
 export const defaultCriteria: Omit<Criterion, "id">[] = [
-  { name: "Implementation & Engineering Quality", description: "Code quality, testing, performance.", weight: 20, assignedJudge: "Lexi" },
-  { name: "Architecture & Complexity Fit", description: "System design and appropriate complexity.", weight: 16, assignedJudge: "Aris" },
-  { name: "Deliverable Completeness", description: "Working demo, complete features.", weight: 20, assignedJudge: "Lexi" },
-  { name: "Project Documentation", description: "README, setup, API docs, video.", weight: 16, assignedJudge: "Nova" },
-  { name: "AI/Agent Integration Evidence", description: "Real agent use, not buzzword.", weight: 20, assignedJudge: "Sage" },
-  { name: "Implementation Innovation", description: "Novelty of approach.", weight: 8, assignedJudge: "Mira" },
+  { name: "Implementation & Engineering Quality", description: "Code quality, testing, performance.", weight: 20, assignedJudge: "Vex" },
+  { name: "Architecture & Complexity Fit",        description: "System design and appropriate complexity.", weight: 16, assignedJudge: "Kael" },
+  { name: "Deliverable Completeness",             description: "Working demo, complete features.", weight: 20, assignedJudge: "Zera" },
+  { name: "Project Documentation",                description: "README, setup, API docs, video.", weight: 16, assignedJudge: "Zera" },
+  { name: "AI/Agent Integration Evidence",        description: "Real agent use, not buzzword.", weight: 20, assignedJudge: "Dusk" },
+  { name: "Implementation Innovation",            description: "Novelty of approach.", weight: 8,  assignedJudge: "Oryn" },
 ];
 
 function buildCriteria(hid: string): Criterion[] {
