@@ -72,7 +72,7 @@ function SubmitProject() {
         ← {hackathon.name}
       </Link>
       <header className="mt-6 mb-10 border-b border-border-dim pb-6">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tighter mb-2">SUBMIT_PROJECT</h1>
+        <h1 className="text-2xl md:text-3xl font-headline italic font-normal tracking-tight mb-2">SUBMIT_PROJECT</h1>
         <p className="text-sm text-muted-foreground font-mono">→ {hackathon.name.toUpperCase()}</p>
       </header>
       <form
