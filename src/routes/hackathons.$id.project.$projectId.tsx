@@ -46,7 +46,7 @@ function ProjectDetail() {
       <header className="mt-6 mb-10 grid grid-cols-1 lg:grid-cols-12 gap-8 border-b border-border pb-10">
         <div className="lg:col-span-8">
           <p className="text-sm font-semibold text-ai mb-3">{project.teamName}</p>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">{project.name}</h1>
+          <h1 className="text-3xl md:text-5xl font-bold italic tracking-tight mb-4">{project.name}</h1>
           <p className="text-lg text-muted-foreground text-pretty mb-6">{project.description}</p>
           <div className="flex flex-wrap gap-2 text-sm font-medium">
             <a

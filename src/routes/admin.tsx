@@ -24,7 +24,7 @@ function Admin() {
     return (
       <div className="max-w-sm mx-auto px-6 py-24">
         <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-3">Restricted</p>
-        <h1 className="text-2xl font-bold tracking-tight mb-6">Operator console</h1>
+        <h1 className="text-2xl font-bold italic tracking-tight mb-6">Operator console</h1>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -62,7 +62,7 @@ function Admin() {
         <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-2">
           Operator console
         </p>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Admin dashboard</h1>
+        <h1 className="text-3xl md:text-4xl font-bold italic tracking-tight">Admin dashboard</h1>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">

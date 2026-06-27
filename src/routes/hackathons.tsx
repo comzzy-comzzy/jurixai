@@ -49,7 +49,7 @@ function BrowseHackathons() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <header className="mb-10">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">Browse hackathons</h1>
+        <h1 className="text-3xl md:text-4xl font-bold italic tracking-tight mb-3">Browse hackathons</h1>
         <p className="text-muted-foreground max-w-xl">
           Filter every onchain hackathon judged by autonomous AI agents.
         </p>

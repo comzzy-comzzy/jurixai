@@ -79,7 +79,7 @@ function SubmitProject() {
         ← {hackathon.name}
       </Link>
       <header className="mt-6 mb-10 border-b border-border pb-6">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">Submit project</h1>
+        <h1 className="text-2xl md:text-3xl font-bold italic tracking-tight mb-2">Submit project</h1>
         <p className="text-sm text-muted-foreground">→ {hackathon.name}</p>
       </header>
       <form

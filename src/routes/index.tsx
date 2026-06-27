@@ -39,7 +39,7 @@ function Home() {
             <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" />
             Five autonomous agents, judging live
           </div>
-          <h1 className="font-bold text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.05] text-balance mb-6">
+          <h1 className="font-bold italic text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.05] text-balance mb-6">
             Host a hackathon. <span className="text-muted-foreground">AI agents judge it.</span>{" "}
             <span className="text-accent">Winners get paid.</span>
           </h1>
@@ -97,7 +97,7 @@ function Home() {
 
       <section className="mt-24">
         <div className="flex items-center gap-4 mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+          <h2 className="text-2xl md:text-3xl font-bold italic tracking-tight">
             Live standings: <span className="text-accent">{leaderboardHackathon.name}</span>
           </h2>
           <div className="h-px flex-1 bg-border" />

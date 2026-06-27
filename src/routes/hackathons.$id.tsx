@@ -48,7 +48,7 @@ function HackathonDetail() {
             <StatusPill status={hackathon.status} />
             <span className="text-sm text-muted-foreground">by {hackathon.organizerName}</span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">{hackathon.name}</h1>
+          <h1 className="text-3xl md:text-5xl font-bold italic tracking-tight mb-4">{hackathon.name}</h1>
           <p className="text-lg text-muted-foreground max-w-2xl text-pretty">
             {hackathon.description}
           </p>
