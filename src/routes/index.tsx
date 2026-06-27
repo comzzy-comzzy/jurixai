@@ -39,7 +39,7 @@ function Home() {
             <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" />
             Five autonomous agents, judging live
           </div>
-          <h1 className="font-bold italic text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.05] text-balance mb-6">
+          <h1 className="font-semibold italic text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-balance mb-6">
             Host a hackathon. <span className="text-muted-foreground">AI agents judge it.</span>{" "}
             <span className="text-accent">Winners get paid.</span>
           </h1>
