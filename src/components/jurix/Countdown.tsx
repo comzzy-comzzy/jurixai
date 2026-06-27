@@ -7,5 +7,7 @@ export function Countdown({ to, className = "" }: { to: string; className?: stri
     const i = setInterval(() => setText(countdown(to)), 30_000);
     return () => clearInterval(i);
   }, [to]);
-  return <span className={`font-mono text-warn ${className}`}>{text}</span>;
+  return (
+    <span className={`font-mono font-medium text-warn tabular-nums ${className}`}>{text}</span>
+  );
 }

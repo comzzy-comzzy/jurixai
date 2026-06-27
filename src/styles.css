@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  JuriXAI theme — Simple Design System (SDS).
+  Token values mirror Figma's Simple Design System (figma.com community / github.com/figma/sds):
+  white surfaces, neutral gray ramp, green = positive/brand, Inter + Roboto Mono, 8px radii.
+*/
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -28,55 +33,53 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
-  --font-display: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
-  --font-headline: "Instrument Serif", ui-serif, Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 4px;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
 }
 
 :root {
-  --background: #0A0A0A;
-  --foreground: #F1F5F9;
-  --muted: #1A1A1A;
-  --muted-foreground: #94A3B8;
-  --accent: #00D8C8;
-  --accent-foreground: #0A0A0A;
-  --ai: #7C3AED;
-  --warn: #F59E0B;
-  --border: rgba(241, 245, 249, 0.08);
-  --border-dim: rgba(241, 245, 249, 0.08);
-  --card: #0F0F0F;
-  --card-foreground: #F1F5F9;
-  --popover: #141414;
-  --popover-foreground: #F1F5F9;
-  --primary: #00D8C8;
-  --primary-foreground: #0A0A0A;
-  --secondary: #1A1A1A;
-  --secondary-foreground: #F1F5F9;
-  --destructive: #EF4444;
-  --destructive-foreground: #F1F5F9;
-  --input: rgba(241, 245, 249, 0.08);
-  --ring: #00D8C8;
-}
-
-.dark {
-  --background: #0A0A0A;
-  --foreground: #F1F5F9;
+  /* SDS light mode — semantic surfaces */
+  --background: #ffffff;
+  --foreground: #1e1e1e; /* gray-900 */
+  --muted: #f5f5f5; /* gray-100 */
+  --muted-foreground: #757575; /* gray-500 */
+  --accent: #009951; /* green-600 — brand / positive */
+  --accent-foreground: #ffffff;
+  --ai: #d732a8; /* pink-600 — AI / agent accent */
+  --warn: #bf6a02; /* yellow-600 */
+  --border: #e6e6e6; /* gray-200 */
+  --border-dim: #e6e6e6; /* gray-200 */
+  --card: #ffffff;
+  --card-foreground: #1e1e1e;
+  --popover: #ffffff;
+  --popover-foreground: #1e1e1e;
+  --primary: #1e1e1e; /* brand-900 — near-black primary */
+  --primary-foreground: #f5f5f5;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #1e1e1e;
+  --destructive: #ec221f; /* red-500 */
+  --destructive-foreground: #ffffff;
+  --input: #d9d9d9; /* gray-300 */
+  --ring: #009951;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
-  html, body {
+  html,
+  body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-display);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   ::selection {
     background: var(--accent);
@@ -85,17 +88,30 @@
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
 }
 
 @keyframes score-grow {
-  from { width: 0%; }
+  from {
+    width: 0%;
+  }
 }
 
 @keyframes slide-in {
-  from { transform: translateY(8px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @utility animate-pulse-dot {

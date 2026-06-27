@@ -3,49 +3,64 @@ import type { Hackathon } from "@/lib/mock-data";
 import { fullUsdc } from "@/lib/format";
 import { StatusPill } from "./StatusPill";
 import { Countdown } from "./Countdown";
+import { ArrowUpRight } from "lucide-react";
 
-export function HackathonCard({ hackathon, index, submissionCount }: { hackathon: Hackathon; index: number; submissionCount: number }) {
-  const num = String(index + 1).padStart(3, "0");
+export function HackathonCard({
+  hackathon,
+  index,
+  submissionCount,
+}: {
+  hackathon: Hackathon;
+  index: number;
+  submissionCount: number;
+}) {
   const isOpen = hackathon.status === "open";
   return (
     <Link
       to="/hackathons/$id"
       params={{ id: hackathon.id }}
-      className="group border border-border-dim p-6 relative flex flex-col hover:border-accent transition-colors bg-background"
+      className="group rounded-xl border border-border bg-card p-6 relative flex flex-col shadow-sm hover:shadow-md hover:border-input transition-all"
     >
-      <span className="absolute top-4 right-6 font-mono text-[10px] text-muted-foreground">#{num}</span>
       <div className="mb-8">
-        <div className="mb-4">
+        <div className="mb-4 flex items-center justify-between">
           <StatusPill status={hackathon.status} />
+          <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-accent transition-colors" />
         </div>
-        <h3 className="text-2xl font-bold tracking-tight mb-1 group-hover:text-accent transition-colors">
+        <h3 className="text-xl font-bold tracking-tight mb-1 group-hover:text-accent transition-colors">
           {hackathon.name}
         </h3>
-        <p className="text-xs font-mono text-muted-foreground uppercase">BY {hackathon.organizerName}</p>
+        <p className="text-sm text-muted-foreground">by {hackathon.organizerName}</p>
       </div>
       <div className="mt-auto space-y-4">
         <div className="flex justify-between items-end">
           <div>
-            <p className="text-[10px] font-mono text-muted-foreground uppercase">Prize Pool</p>
-            <p className="text-xl font-bold tabular-nums">{fullUsdc(hackathon.prizePoolUsdc)} USDC</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">Prize pool</p>
+            <p className="text-xl font-bold tabular-nums">
+              {fullUsdc(hackathon.prizePoolUsdc)}{" "}
+              <span className="text-sm font-semibold text-muted-foreground">USDC</span>
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-tighter">
-              {isOpen ? "Closes In" : hackathon.status === "judging" ? "Status" : "Finalized"}
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">
+              {isOpen ? "Closes in" : hackathon.status === "judging" ? "Status" : "Result"}
             </p>
             {isOpen ? (
-              <Countdown to={hackathon.deadline} className="text-xs" />
+              <Countdown to={hackathon.deadline} className="text-sm" />
             ) : hackathon.status === "judging" ? (
-              <p className="text-xs font-mono text-warn">CALCULATING</p>
+              <p className="text-sm font-medium text-warn">Calculating</p>
             ) : (
-              <p className="text-xs font-mono text-muted-foreground">CLOSED</p>
+              <p className="text-sm font-medium text-muted-foreground">Closed</p>
             )}
           </div>
         </div>
-        <div className="pt-4 border-t border-border-dim flex justify-between items-center text-[10px] font-mono text-muted-foreground">
-          <span>SUBMISSIONS: {submissionCount}</span>
-          <span className="text-foreground group-hover:text-accent transition-colors">
-            {hackathon.status === "closed" ? "VIEW_RESULTS →" : hackathon.status === "judging" ? "MONITOR_JUDGES →" : "VIEW_DETAILS →"}
+        <div className="pt-4 border-t border-border flex justify-between items-center text-sm">
+          <span className="text-muted-foreground">{submissionCount} submissions</span>
+          <span className="font-semibold text-foreground group-hover:text-accent transition-colors">
+            {hackathon.status === "closed"
+              ? "View results"
+              : hackathon.status === "judging"
+                ? "Monitor judges"
+                : "View details"}
           </span>
         </div>
       </div>

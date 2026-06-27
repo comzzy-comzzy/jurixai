@@ -13,16 +13,16 @@ export function ScoreBar({
   return (
     <div className="w-full">
       {showLabel && (
-        <div className="flex items-baseline justify-between mb-1.5 font-mono">
-          <span className="text-sm font-bold text-foreground tabular-nums">
+        <div className="flex items-baseline justify-between mb-1.5">
+          <span className="text-sm font-semibold text-foreground tabular-nums">
             {score.toFixed(2)}
           </span>
-          <span className="text-[10px] text-muted-foreground">/ {max.toFixed(2)}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">/ {max.toFixed(2)}</span>
         </div>
       )}
-      <div className="h-1.5 w-full bg-white/5 overflow-hidden">
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
         <div
-          className="h-full bg-accent animate-score-grow"
+          className="h-full rounded-full bg-accent animate-score-grow"
           style={{ width: `${pct}%`, animationDelay: `${delay}ms` }}
         />
       </div>

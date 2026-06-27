@@ -6,16 +6,20 @@ const colorMap: Record<string, string> = {
   warn: "text-warn",
 };
 
-export function JudgeActivityFeed({ title = "LIVE_FEED" }: { title?: string }) {
+export function JudgeActivityFeed({ title = "Live feed" }: { title?: string }) {
   return (
-    <div className="p-4 border border-border-dim bg-background">
-      <p className="text-[10px] font-mono text-muted-foreground mb-4 uppercase tracking-widest">{title}</p>
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" />
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+      </div>
       <div className="space-y-3">
         {activityFeed.map((e, i) => (
-          <div key={i} className="flex justify-between gap-3 text-[10px] font-mono">
-            <span className="text-muted-foreground shrink-0">{e.ts}</span>
+          <div key={i} className="flex justify-between gap-3 text-xs">
+            <span className="text-muted-foreground shrink-0 font-mono tabular-nums">{e.ts}</span>
             <span className={`${colorMap[e.color] ?? "text-foreground"} text-right`}>
-              <span className="font-bold mr-1">{e.judge}</span>{e.text}
+              <span className="font-semibold mr-1">{e.judge}</span>
+              {e.text}
             </span>
           </div>
         ))}

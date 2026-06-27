@@ -10,9 +10,16 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "JuriXAI — Host a hackathon. AI agents judge it." },
-      { name: "description", content: "Autonomous evaluation for onchain builders. USDC prizes distributed instantly via Circle wallets on Arc." },
+      {
+        name: "description",
+        content:
+          "Autonomous evaluation for onchain builders. USDC prizes distributed instantly via Circle wallets on Arc.",
+      },
       { property: "og:title", content: "JuriXAI — Autonomous hackathon judging" },
-      { property: "og:description", content: "Five named AI agents score every submission. Winners paid in USDC automatically." },
+      {
+        property: "og:description",
+        content: "Five named AI agents score every submission. Winners paid in USDC automatically.",
+      },
     ],
   }),
   component: Home,
@@ -22,31 +29,36 @@ function Home() {
   const featured = hackathons.slice(0, 6);
   const leaderboardId = "solana-speedrun";
   const leaderboardProjects = getHackathonProjects(leaderboardId).slice(0, 5);
-  const leaderboardHackathon = hackathons.find(h => h.id === leaderboardId)!;
+  const leaderboardHackathon = hackathons.find((h) => h.id === leaderboardId)!;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-16">
       <section className="mb-20 animate-slide-in">
         <div className="max-w-4xl">
-          <h1 className="font-headline italic font-normal text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.02] text-balance mb-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 mb-6 text-xs font-medium text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" />
+            Five autonomous agents, judging live
+          </div>
+          <h1 className="font-bold text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.05] text-balance mb-6">
             Host a hackathon. <span className="text-muted-foreground">AI agents judge it.</span>{" "}
             <span className="text-accent">Winners get paid.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground font-medium mb-10 max-w-2xl text-pretty">
-            Onchain hackathon hosting where five autonomous agents score every submission and USDC prizes settle instantly via Circle wallets on Arc.
+          <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl text-pretty">
+            Onchain hackathon hosting where five autonomous agents score every submission and USDC
+            prizes settle instantly via Circle wallets on Arc.
           </p>
           <div className="flex flex-wrap gap-3 mb-12">
             <Link
               to="/create"
-              className="bg-accent text-accent-foreground px-5 py-3 text-xs font-mono font-bold uppercase tracking-widest"
+              className="rounded-lg bg-accent text-accent-foreground px-5 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
             >
-              HOST_A_HACKATHON
+              Host a hackathon
             </Link>
             <Link
               to="/hackathons"
-              className="border border-border-dim hover:border-accent transition-colors text-foreground px-5 py-3 text-xs font-mono font-bold uppercase tracking-widest"
+              className="rounded-lg border border-border hover:bg-muted transition-colors text-foreground px-5 py-3 text-sm font-semibold"
             >
-              BROWSE_HACKATHONS
+              Browse hackathons
             </Link>
           </div>
           <StatsBar />
@@ -55,11 +67,14 @@ function Home() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div className="lg:col-span-8 space-y-8">
-          <div className="flex items-center justify-between border-b border-border-dim pb-4">
-            <h2 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
-              ACTIVE_HACKATHONS ({String(featured.length).padStart(2, "0")})
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <h2 className="text-sm font-semibold text-foreground">
+              Active hackathons{" "}
+              <span className="text-muted-foreground font-normal">({featured.length})</span>
             </h2>
-            <Link to="/hackathons" className="text-xs font-mono text-accent uppercase tracking-widest">VIEW_ALL →</Link>
+            <Link to="/hackathons" className="text-sm font-semibold text-accent hover:opacity-80">
+              View all →
+            </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {featured.map((h, i) => (
@@ -82,16 +97,16 @@ function Home() {
 
       <section className="mt-24">
         <div className="flex items-center gap-4 mb-8">
-          <h2 className="text-2xl md:text-3xl font-headline italic tracking-tight">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
             Live standings: <span className="text-accent">{leaderboardHackathon.name}</span>
           </h2>
-          <div className="h-px flex-1 bg-border-dim" />
+          <div className="h-px flex-1 bg-border" />
           <Link
             to="/hackathons/$id"
             params={{ id: leaderboardId }}
-            className="text-xs font-mono text-accent uppercase tracking-widest shrink-0"
+            className="text-sm font-semibold text-accent hover:opacity-80 shrink-0"
           >
-            FULL_BOARD →
+            Full board →
           </Link>
         </div>
         <Leaderboard hackathonId={leaderboardId} projects={leaderboardProjects} />
