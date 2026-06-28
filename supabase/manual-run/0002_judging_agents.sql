@@ -1,3 +1,6 @@
+-- Copy this whole file into Supabase SQL Editor and run it.
+-- This is the corrected version of migration 0002.
+
 -- JuriXAI judging foundation
 -- Adds real AI judge agents, hackathon criteria, submission status, and
 -- per-agent scoring records so the UI can stop relying on mock data.
