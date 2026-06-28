@@ -59,6 +59,30 @@ export interface SubmissionScore {
   created_at: string;
 }
 
+export interface JudgingRun {
+  id: string;
+  hackathon_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  triggered_by: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface JudgingRunItem {
+  id: string;
+  run_id: string;
+  registration_id: string;
+  agent_id: string;
+  criterion_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
 export interface SubmissionSummary {
   id: string;
   hackathon_id: string;

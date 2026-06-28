@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { triggerHackathonJudging } from "@/lib/jurix/actions.server";
 import { listHackathons, getHomeData } from "@/lib/jurix/data.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
@@ -26,6 +27,8 @@ function Admin() {
   const [authed, setAuthed] = useState(false);
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const totalPool = useMemo(
     () => hackathons.reduce((sum, hackathon) => sum + hackathon.prize_pool_usdc, 0),
@@ -89,6 +92,7 @@ function Admin() {
       </div>
 
       <h2 className="text-sm font-semibold text-foreground mb-3">Hackathon registry</h2>
+      {actionMessage && <p className="text-sm text-accent mb-3">{actionMessage}</p>}
       {hackathons.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
           No hackathons have been created in Supabase yet.
@@ -104,6 +108,7 @@ function Admin() {
                 <th className="p-3 font-medium">Subs</th>
                 <th className="p-3 font-medium">Deadline</th>
                 <th className="p-3 font-medium">Wallet</th>
+                <th className="p-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -122,6 +127,33 @@ function Admin() {
                   </td>
                   <td className="p-3">
                     <WalletAddress address={hackathon.treasury_address ?? "Treasury pending"} />
+                  </td>
+                  <td className="p-3 text-right">
+                    <button
+                      type="button"
+                      disabled={busyId === hackathon.id}
+                      onClick={async () => {
+                        setBusyId(hackathon.id);
+                        setActionMessage(null);
+                        try {
+                          const result = await triggerHackathonJudging({
+                            data: { hackathon_id: hackathon.id, triggered_by: "admin" },
+                          });
+                          setActionMessage(
+                            `Judging started for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows.`,
+                          );
+                        } catch (error) {
+                          setActionMessage(
+                            error instanceof Error ? error.message : "Failed to trigger judging.",
+                          );
+                        } finally {
+                          setBusyId(null);
+                        }
+                      }}
+                      className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      {busyId === hackathon.id ? "Running…" : "Run judging"}
+                    </button>
                   </td>
                 </tr>
               ))}

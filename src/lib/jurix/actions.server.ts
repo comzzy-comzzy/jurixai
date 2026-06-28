@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getHackathonDetail } from "./data.server";
+import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 
 type HackathonCriterionInput = {
   name: string;
@@ -115,4 +117,18 @@ export const createSubmission = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     return { id: created.id };
+  });
+
+export const triggerHackathonJudging = createServerFn({ method: "POST" })
+  .validator((data: { hackathon_id: string; triggered_by?: string }) => data)
+  .handler(async ({ data }) => {
+    const hackathon = await getHackathonDetail(data.hackathon_id);
+    if (!hackathon) throw new Error("Hackathon not found.");
+    return runHackathonJudging(hackathon, data.triggered_by ?? "admin");
+  });
+
+export const triggerExpiredHackathons = createServerFn({ method: "POST" })
+  .validator((data: { triggered_by?: string } | undefined) => data)
+  .handler(async ({ data }) => {
+    return runExpiredHackathons(data?.triggered_by ?? "cron");
   });
