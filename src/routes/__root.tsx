@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TerminalNav } from "@/components/jurix/TerminalNav";
 import { SiteFooter } from "@/components/jurix/SiteFooter";
 import { Toaster } from "@/components/ui/sonner";
+import { WalletProvider } from "@/lib/circle/useWallet";
 
 function NotFoundComponent() {
   return (
@@ -145,14 +146,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col bg-background text-foreground">
-        <TerminalNav />
-        <main className="flex-1">
-          <Outlet />
-        </main>
-        <SiteFooter />
-      </div>
-      <Toaster />
+      <WalletProvider>
+        <div className="min-h-screen flex flex-col bg-background text-foreground">
+          <TerminalNav />
+          <main className="flex-1">
+            <Outlet />
+          </main>
+          <SiteFooter />
+        </div>
+        <Toaster />
+      </WalletProvider>
     </QueryClientProvider>
   );
 }

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { WalletAddress } from "./WalletAddress";
+import { AccountButton } from "./AccountButton";
 import logoUrl from "@/assets/jurixai-logo.png";
 
 export function TerminalNav() {
@@ -48,15 +48,7 @@ export function TerminalNav() {
           >
             Admin
           </Link>
-          <div className="hidden lg:block">
-            <WalletAddress address="0x71A4f9b2C8eD3a7B5f6c9D1E2A4b8C3d5E7f3f9c" />
-          </div>
-          <Link
-            to="/create"
-            className="rounded-lg px-4 py-2 bg-accent text-accent-foreground text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
-          >
-            Launch app
-          </Link>
+          <AccountButton />
         </div>
       </div>
     </nav>
