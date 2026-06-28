@@ -11,6 +11,65 @@ import type {
   SubmissionSummary,
 } from "./types";
 
+const FALLBACK_AGENTS: JudgeAgent[] = [
+  {
+    id: "fallback-vex",
+    slug: "vex-01",
+    name: "Vex",
+    short_code: "VX",
+    role: "Code Judge",
+    focus_area: "Code quality, correctness, maintainability, and security basics.",
+    status: "idle",
+    color_hex: "#00D8C8",
+    weight_percent: 35,
+    system_prompt: null,
+    scoring_notes: null,
+    created_at: new Date(0).toISOString(),
+  },
+  {
+    id: "fallback-kael",
+    slug: "kael-02",
+    name: "Kael",
+    short_code: "KL",
+    role: "Product Judge",
+    focus_area: "Problem clarity, UX, user value, and product completeness.",
+    status: "idle",
+    color_hex: "#3B82F6",
+    weight_percent: 25,
+    system_prompt: null,
+    scoring_notes: null,
+    created_at: new Date(0).toISOString(),
+  },
+  {
+    id: "fallback-oryn",
+    slug: "oryn-03",
+    name: "Oryn",
+    short_code: "OR",
+    role: "Innovation Judge",
+    focus_area: "Originality, ambition, and differentiated thinking.",
+    status: "idle",
+    color_hex: "#7C3AED",
+    weight_percent: 20,
+    system_prompt: null,
+    scoring_notes: null,
+    created_at: new Date(0).toISOString(),
+  },
+  {
+    id: "fallback-zera",
+    slug: "zera-04",
+    name: "Zera",
+    short_code: "ZR",
+    role: "Delivery Judge",
+    focus_area: "Documentation, reproducibility, polish, and shipping quality.",
+    status: "idle",
+    color_hex: "#EF4444",
+    weight_percent: 20,
+    system_prompt: null,
+    scoring_notes: null,
+    created_at: new Date(0).toISOString(),
+  },
+];
+
 function toNumber(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value === "string") return Number(value);
@@ -158,7 +217,7 @@ export async function getHomeData(): Promise<HomeData> {
         verdicts_rendered: 0,
       },
       featured_hackathons: [],
-      active_agents: [],
+      active_agents: FALLBACK_AGENTS,
       recent_activity: [],
       leaderboard_hackathon: null,
       leaderboard_submissions: [],
@@ -231,6 +290,11 @@ export async function getHomeData(): Promise<HomeData> {
         : "Updated evaluation evidence and confidence.",
   }));
 
+  const normalizedAgents =
+    (agents ?? []).length > 0
+      ? (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>))
+      : FALLBACK_AGENTS;
+
   return {
     stats: {
       active_hackathons: activeHackathons,
@@ -239,7 +303,7 @@ export async function getHomeData(): Promise<HomeData> {
       verdicts_rendered: verdictsRendered,
     },
     featured_hackathons: featured,
-    active_agents: (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>)),
+    active_agents: normalizedAgents,
     recent_activity: recentActivity,
     leaderboard_hackathon: leaderboardHackathon,
     leaderboard_submissions: leaderboardSubmissions,
@@ -298,10 +362,15 @@ export async function getHackathonDetail(id: string): Promise<HackathonDetail | 
     )
     .sort((a, b) => b.weighted_score - a.weighted_score);
 
+  const normalizedAgents =
+    (agents ?? []).length > 0
+      ? (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>))
+      : FALLBACK_AGENTS;
+
   return {
     ...normalizeHackathon(hackathon as Record<string, unknown>, submissionList.length),
     criteria: (criteria ?? []).map((row) => normalizeCriterion(row as Record<string, unknown>)),
-    agents: (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>)),
+    agents: normalizedAgents,
     submissions: submissionList,
   };
 }
