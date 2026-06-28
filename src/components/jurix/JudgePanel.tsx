@@ -1,6 +1,6 @@
-import type { Judge } from "@/lib/mock-data";
+import type { JudgeAgent } from "@/lib/jurix/types";
 
-function StatusDot({ status }: { status: Judge["status"] }) {
+function StatusDot({ status }: { status: JudgeAgent["status"] }) {
   if (status === "reviewing") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warn">
@@ -11,17 +11,20 @@ function StatusDot({ status }: { status: Judge["status"] }) {
   if (status === "done") {
     return <span className="text-xs font-medium text-accent">Done</span>;
   }
+  if (status === "offline") {
+    return <span className="text-xs font-medium text-muted-foreground">Offline</span>;
+  }
   return <span className="text-xs font-medium text-muted-foreground">Idle</span>;
 }
 
 const order = ["Vex", "Kael", "Oryn", "Zera", "Dusk"];
-function judgeIndex(j: Judge) {
+function judgeIndex(j: JudgeAgent) {
   const i = order.indexOf(j.name);
   return i === -1 ? 1 : i + 1;
 }
 
-export function JudgeRow({ judge }: { judge: Judge }) {
-  const c = judge.colorHex;
+export function JudgeRow({ judge }: { judge: JudgeAgent }) {
+  const c = judge.color_hex;
   return (
     <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4 shadow-sm">
       <div
@@ -38,11 +41,9 @@ export function JudgeRow({ judge }: { judge: Judge }) {
           <StatusDot status={judge.status} />
         </div>
         <div className="flex justify-between gap-2 mt-1 text-xs">
-          <span className="text-muted-foreground">
-            {judge.reviewsTotal.toLocaleString()} verdicts
-          </span>
+          <span className="text-muted-foreground">{judge.weight_percent}% weight</span>
           <span className="truncate font-medium" style={{ color: c }}>
-            {judge.focus}
+            {judge.focus_area}
           </span>
         </div>
       </div>
@@ -54,7 +55,7 @@ export function JudgePanel({
   judges,
   title = "AI judge core",
 }: {
-  judges: Judge[];
+  judges: JudgeAgent[];
   title?: string;
 }) {
   return (
@@ -70,11 +71,11 @@ export function JudgePanel({
   );
 }
 
-export function JudgeGrid({ judges }: { judges: Judge[] }) {
+export function JudgeGrid({ judges }: { judges: JudgeAgent[] }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
       {judges.map((j) => {
-        const c = j.colorHex;
+        const c = j.color_hex;
         return (
           <div
             key={j.name}
@@ -90,10 +91,10 @@ export function JudgeGrid({ judges }: { judges: Judge[] }) {
               <p className="text-lg font-bold tracking-tight" style={{ color: c }}>
                 {j.name}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">{j.focus}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{j.focus_area}</p>
             </div>
             <StatusDot status={j.status} />
-            <p className="text-xs text-muted-foreground">{j.reviewsTotal} total</p>
+            <p className="text-xs text-muted-foreground">{j.weight_percent}% total weight</p>
           </div>
         );
       })}

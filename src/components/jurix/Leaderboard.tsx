@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { Project } from "@/lib/mock-data";
+import type { SubmissionSummary } from "@/lib/jurix/types";
 import { ScoreBar } from "./ScoreBar";
 import { WalletAddress } from "./WalletAddress";
 
@@ -8,7 +8,7 @@ export function Leaderboard({
   projects,
 }: {
   hackathonId: string;
-  projects: Project[];
+  projects: SubmissionSummary[];
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
@@ -38,19 +38,19 @@ export function Leaderboard({
                   params={{ id: hackathonId, projectId: p.id }}
                   className="font-semibold text-foreground hover:text-accent transition-colors"
                 >
-                  {p.name}
+                  {p.project_name}
                 </Link>
-                <div className="text-xs text-muted-foreground mt-0.5">{p.teamName}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{p.team_name}</div>
               </td>
               <td className="py-4 px-5 hidden md:table-cell">
-                <WalletAddress address={p.teamWalletAddress} />
+                <WalletAddress address={p.payout_address} />
               </td>
               <td className="py-4 px-5 font-bold tabular-nums">
-                {(p.compositeScore / 10).toFixed(2)}
+                {(p.weighted_score / 10).toFixed(2)}
                 <span className="text-xs text-muted-foreground font-normal"> / 10.00</span>
               </td>
               <td className="py-4 px-5 w-48 hidden sm:table-cell">
-                <ScoreBar score={p.compositeScore / 10} delay={i * 80} showLabel={false} />
+                <ScoreBar score={p.weighted_score / 10} delay={i * 80} showLabel={false} />
               </td>
             </tr>
           ))}

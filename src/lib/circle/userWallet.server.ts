@@ -21,6 +21,12 @@ function client() {
   return initiateUserControlledWalletsClient({ apiKey });
 }
 
+/** Report whether the server has the minimum config required for email login. */
+export const emailLoginStatus = createServerFn({ method: "GET" }).handler(async () => ({
+  configured: Boolean(process.env.CIRCLE_API_KEY?.trim()),
+  chain: CHAIN,
+}));
+
 /** Mint a device token for email login — triggers Circle to email the OTP code. */
 export const emailLoginStart = createServerFn({ method: "POST" })
   .validator((d: { email: string; deviceId: string }) => d)

@@ -1,72 +1,63 @@
-import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { getHackathon } from "@/lib/mock-data";
+import { createSubmission } from "@/lib/jurix/actions.server";
+import { getHackathonDetail } from "@/lib/jurix/data.server";
 
 export const Route = createFileRoute("/hackathons/$id/submit")({
-  loader: ({ params }) => {
-    const h = getHackathon(params.id);
-    if (!h) throw notFound();
-    return { hackathon: h };
+  loader: async ({ params }) => {
+    const hackathon = await getHackathonDetail(params.id);
+    if (!hackathon) throw notFound();
+    return hackathon;
   },
   head: ({ loaderData }) => ({
     meta: [
-      {
-        title: loaderData ? `Submit — ${loaderData.hackathon.name} — JuriXAI` : "Submit — JuriXAI",
-      },
+      { title: loaderData ? `Submit — ${loaderData.name} — JuriXAI` : "Submit — JuriXAI" },
       { name: "description", content: "Submit your project for autonomous AI judging." },
     ],
   }),
   component: SubmitProject,
 });
 
-const fields = [
-  { name: "projectName", label: "Project name", required: true },
-  { name: "teamName", label: "Team name", required: true },
-  { name: "description", label: "One-line description", required: true, textarea: true },
-  { name: "githubUrl", label: "GitHub repo URL", required: true, type: "url" },
-  { name: "demoUrl", label: "Live demo URL (optional)", required: false, type: "url" },
-  { name: "videoUrl", label: "Video demo URL", required: true, type: "url" },
-  {
-    name: "teamWalletAddress",
-    label: "Team wallet address (prize receipt)",
-    required: true,
-    mono: true,
-  },
-] as const;
-
 function SubmitProject() {
-  const { hackathon } = Route.useLoaderData();
-  const router = useRouter();
-  const [submitted, setSubmitted] = useState(false);
+  const hackathon = Route.useLoaderData();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    projectName: "",
+    teamName: "",
+    description: "",
+    githubUrl: "",
+    demoUrl: "",
+    videoUrl: "",
+    payoutAddress: "",
+  });
 
-  if (submitted) {
-    return (
-      <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-        <div className="size-16 mx-auto mb-6 rounded-full bg-accent/10 text-accent grid place-items-center">
-          <span className="text-2xl">✓</span>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight mb-3">Submitted</h1>
-        <p className="text-muted-foreground mb-2">AI judges are reviewing your project now.</p>
-        <p className="text-sm text-muted-foreground mb-10">
-          Verdict pipeline triggered · 5 agents dispatched
-        </p>
-        <div className="flex justify-center gap-3">
-          <Link
-            to="/hackathons/$id"
-            params={{ id: hackathon.id }}
-            className="rounded-lg bg-accent text-accent-foreground px-5 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
-          >
-            View hackathon
-          </Link>
-          <button
-            onClick={() => router.invalidate()}
-            className="rounded-lg border border-border text-foreground px-5 py-3 text-sm font-semibold hover:bg-muted transition-colors"
-          >
-            Submit another
-          </button>
-        </div>
-      </div>
-    );
+  async function handleSubmit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await createSubmission({
+        data: {
+          hackathon_id: hackathon.id,
+          project_name: form.projectName,
+          team_name: form.teamName,
+          description: form.description,
+          github_url: form.githubUrl,
+          demo_url: form.demoUrl || undefined,
+          video_url: form.videoUrl,
+          payout_address: form.payoutAddress,
+        },
+      });
+      await navigate({
+        to: "/hackathons/$id/project/$projectId",
+        params: { id: hackathon.id, projectId: result.id },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit project.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -79,47 +70,69 @@ function SubmitProject() {
         ← {hackathon.name}
       </Link>
       <header className="mt-6 mb-10 border-b border-border pb-6">
-        <h1 className="text-2xl md:text-3xl font-bold italic tracking-tight mb-2">Submit project</h1>
+        <h1 className="text-2xl md:text-3xl font-bold italic tracking-tight mb-2">
+          Submit project
+        </h1>
         <p className="text-sm text-muted-foreground">→ {hackathon.name}</p>
       </header>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitted(true);
-        }}
-        className="space-y-6"
-      >
-        {fields.map((f) => (
-          <div key={f.name}>
-            <label className="block text-sm font-medium text-foreground mb-1.5">
-              {f.label}
-              {f.required && <span className="text-accent ml-1">*</span>}
-            </label>
-            {"textarea" in f && f.textarea ? (
-              <textarea
-                name={f.name}
-                required={f.required}
-                rows={3}
-                className="w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-              />
-            ) : (
-              <input
-                name={f.name}
-                required={f.required}
-                type={("type" in f && f.type) || "text"}
-                className={`w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${
-                  "mono" in f && f.mono ? "font-mono" : ""
-                }`}
-              />
-            )}
-          </div>
-        ))}
+      <div className="space-y-6">
+        <Field
+          label="Project name"
+          value={form.projectName}
+          onChange={(value) => setForm({ ...form, projectName: value })}
+          required
+        />
+        <Field
+          label="Team name"
+          value={form.teamName}
+          onChange={(value) => setForm({ ...form, teamName: value })}
+          required
+        />
+        <Field
+          label="One-line description"
+          value={form.description}
+          onChange={(value) => setForm({ ...form, description: value })}
+          required
+          textarea
+        />
+        <Field
+          label="GitHub repo URL"
+          value={form.githubUrl}
+          onChange={(value) => setForm({ ...form, githubUrl: value })}
+          required
+          type="url"
+        />
+        <Field
+          label="Live demo URL (optional)"
+          value={form.demoUrl}
+          onChange={(value) => setForm({ ...form, demoUrl: value })}
+          type="url"
+        />
+        <Field
+          label="Video demo URL"
+          value={form.videoUrl}
+          onChange={(value) => setForm({ ...form, videoUrl: value })}
+          required
+          type="url"
+        />
+        <Field
+          label="Team wallet address (prize receipt)"
+          value={form.payoutAddress}
+          onChange={(value) => setForm({ ...form, payoutAddress: value })}
+          required
+          mono
+        />
+
+        {error && <p className="text-sm text-warn">{error}</p>}
+
         <div className="pt-4 border-t border-border flex flex-wrap gap-3">
           <button
-            type="submit"
-            className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+            type="button"
+            onClick={handleSubmit}
+            disabled={busy}
+            className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            Submit for judging
+            {busy ? "Submitting…" : "Submit for judging"}
           </button>
           <Link
             to="/hackathons/$id"
@@ -129,7 +142,53 @@ function SubmitProject() {
             Cancel
           </Link>
         </div>
-      </form>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  required,
+  textarea,
+  type = "text",
+  mono,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  textarea?: boolean;
+  type?: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-foreground mb-1.5">
+        {label}
+        {required && <span className="text-accent ml-1">*</span>}
+      </label>
+      {textarea ? (
+        <textarea
+          required={required}
+          rows={3}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+        />
+      ) : (
+        <input
+          required={required}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${
+            mono ? "font-mono" : ""
+          }`}
+        />
+      )}
     </div>
   );
 }

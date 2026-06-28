@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { Hackathon } from "@/lib/mock-data";
+import type { HackathonSummary } from "@/lib/jurix/types";
 import { fullUsdc } from "@/lib/format";
 import { StatusPill } from "./StatusPill";
 import { Countdown } from "./Countdown";
@@ -10,7 +10,7 @@ export function HackathonCard({
   index,
   submissionCount,
 }: {
-  hackathon: Hackathon;
+  hackathon: HackathonSummary;
   index: number;
   submissionCount: number;
 }) {

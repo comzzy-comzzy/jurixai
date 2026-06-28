@@ -1,8 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { judges } from "@/lib/mock-data";
+import { createHackathon } from "@/lib/jurix/actions.server";
+import { getHomeData } from "@/lib/jurix/data.server";
 
 export const Route = createFileRoute("/create")({
+  loader: () => getHomeData(),
   head: () => ({
     meta: [
       { title: "Host a Hackathon — JuriXAI" },
@@ -21,113 +23,188 @@ type Criterion = {
   name: string;
   description: string;
   weight: number;
-  assignedJudge: string;
+  agentId: string;
 };
 
 function CreateHackathon() {
+  const navigate = useNavigate();
+  const { active_agents } = Route.useLoaderData();
   const [step, setStep] = useState(0);
-  const [criteria, setCriteria] = useState<Criterion[]>([
-    { id: "c1", name: "Technical Quality", description: "", weight: 30, assignedJudge: "Vex" },
-    { id: "c2", name: "Originality", description: "", weight: 25, assignedJudge: "Oryn" },
-    { id: "c3", name: "Architecture", description: "", weight: 20, assignedJudge: "Kael" },
-    { id: "c4", name: "Demo Polish", description: "", weight: 15, assignedJudge: "Zera" },
-    { id: "c5", name: "Agent Integration", description: "", weight: 10, assignedJudge: "Dusk" },
-  ]);
-  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    organizerName: "",
+    organizerEmail: "",
+    description: "",
+    startDate: "",
+    deadline: "",
+    prizePoolUsdc: "25000",
+    winnerSplit: ["50", "30", "20"],
+  });
+
+  const defaultAgents = active_agents.slice(0, 4);
+  const [criteria, setCriteria] = useState<Criterion[]>(
+    defaultAgents.map((agent, index) => ({
+      id: `c${index + 1}`,
+      name:
+        index === 0
+          ? "Technical Quality"
+          : index === 1
+            ? "Product Value"
+            : index === 2
+              ? "Originality"
+              : "Documentation & Delivery",
+      description: "",
+      weight: agent.weight_percent,
+      agentId: agent.id,
+    })),
+  );
 
   const steps = ["Basics", "Prize pool", "Criteria", "Review"];
-  const totalWeight = criteria.reduce((s, c) => s + c.weight, 0);
+  const totalWeight = criteria.reduce((sum, item) => sum + item.weight, 0);
 
-  if (done) {
-    return (
-      <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-        <div className="size-16 mx-auto mb-6 rounded-full bg-accent/10 text-accent grid place-items-center text-2xl">
-          ✓
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight mb-3">Hackathon created</h1>
-        <p className="text-muted-foreground mb-1">Circle wallet provisioned. AI judges armed.</p>
-        <p className="text-sm text-muted-foreground mb-10">
-          Awaiting USDC funding → goes live on confirmation
-        </p>
-        <Link
-          to="/hackathons"
-          className="inline-flex rounded-lg bg-accent text-accent-foreground px-5 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
-        >
-          Browse hackathons
-        </Link>
-      </div>
-    );
+  async function handleCreate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await createHackathon({
+        data: {
+          name: form.name,
+          description: form.description,
+          organizer_name: form.organizerName,
+          organizer_email: form.organizerEmail,
+          prize_pool_usdc: Number(form.prizePoolUsdc),
+          start_date: form.startDate,
+          deadline: form.deadline,
+          winner_split: form.winnerSplit.map((value) => Number(value)),
+          criteria: criteria.map((criterion) => ({
+            name: criterion.name,
+            description: criterion.description,
+            weight_percent: criterion.weight,
+            agent_id: criterion.agentId,
+          })),
+        },
+      });
+      await navigate({ to: "/hackathons/$id", params: { id: result.id } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create hackathon.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
       <header className="mb-10">
-        <h1 className="text-3xl md:text-4xl font-bold italic tracking-tight mb-3">Host a hackathon</h1>
+        <h1 className="text-3xl md:text-4xl font-bold italic tracking-tight mb-3">
+          Host a hackathon
+        </h1>
         <p className="text-muted-foreground max-w-xl">
-          Four steps. No human judges. Prizes settle automatically when the deadline expires.
+          Four steps. Configure real judging criteria and create a live event in Supabase.
         </p>
       </header>
 
       <div className="flex gap-1 mb-8 rounded-lg border border-border bg-muted p-1">
-        {steps.map((s, i) => (
+        {steps.map((label, index) => (
           <div
-            key={s}
+            key={label}
             className={`flex-1 px-3 py-2 text-xs font-semibold text-center rounded-md transition-colors ${
-              i === step
+              index === step
                 ? "bg-accent text-accent-foreground shadow-sm"
-                : i < step
+                : index < step
                   ? "text-accent"
                   : "text-muted-foreground"
             }`}
           >
-            <span className="opacity-60 mr-1">{i + 1}</span>
-            {s}
+            <span className="opacity-60 mr-1">{index + 1}</span>
+            {label}
           </div>
         ))}
       </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (step < steps.length - 1) setStep(step + 1);
-          else setDone(true);
-        }}
-        className="space-y-6"
-      >
+      <div className="space-y-6">
         {step === 0 && (
           <>
-            <Field label="Hackathon name" required />
-            <Field label="Organizer name" required />
-            <Field label="Description" required textarea />
+            <Field
+              label="Hackathon name"
+              value={form.name}
+              onChange={(value) => setForm({ ...form, name: value })}
+              required
+            />
+            <Field
+              label="Organizer name"
+              value={form.organizerName}
+              onChange={(value) => setForm({ ...form, organizerName: value })}
+              required
+            />
+            <Field
+              label="Organizer email"
+              type="email"
+              value={form.organizerEmail}
+              onChange={(value) => setForm({ ...form, organizerEmail: value })}
+              required
+            />
+            <Field
+              label="Description"
+              value={form.description}
+              onChange={(value) => setForm({ ...form, description: value })}
+              required
+              textarea
+            />
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Start date" type="date" required />
-              <Field label="Submission deadline" type="date" required />
+              <Field
+                label="Start date"
+                type="date"
+                value={form.startDate}
+                onChange={(value) => setForm({ ...form, startDate: value })}
+                required
+              />
+              <Field
+                label="Submission deadline"
+                type="date"
+                value={form.deadline}
+                onChange={(value) => setForm({ ...form, deadline: value })}
+                required
+              />
             </div>
           </>
         )}
 
         {step === 1 && (
           <>
-            <Field label="Prize pool (USDC)" type="number" required mono />
+            <Field
+              label="Prize pool (USDC)"
+              type="number"
+              value={form.prizePoolUsdc}
+              onChange={(value) => setForm({ ...form, prizePoolUsdc: value })}
+              required
+              mono
+            />
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 Winner split (% by rank)
               </label>
               <div className="grid grid-cols-3 gap-3">
-                {[60, 30, 10].map((v, i) => (
+                {form.winnerSplit.map((value, index) => (
                   <input
-                    key={i}
-                    defaultValue={v}
+                    key={index}
+                    value={value}
                     type="number"
+                    onChange={(e) => {
+                      const next = [...form.winnerSplit];
+                      next[index] = e.target.value;
+                      setForm({ ...form, winnerSplit: next });
+                    }}
                     className="rounded-lg bg-background border border-border px-3.5 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
                   />
                 ))}
               </div>
             </div>
             <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-muted-foreground">
-              <p className="font-semibold text-accent mb-1">Circle wallet</p>A new Circle wallet
-              will be provisioned on Arc. Fund it after creation; the hackathon goes live on
-              confirmation.
+              <p className="font-semibold text-accent mb-1">Treasury setup</p>
+              Treasury wallet creation is still pending Circle payout automation. The hackathon
+              record will still be created live.
             </div>
           </>
         )}
@@ -140,50 +217,62 @@ function CreateHackathon() {
                 {totalWeight}% / 100%
               </span>
             </div>
-            {criteria.map((c, idx) => (
+            {criteria.map((criterion, index) => (
               <div
-                key={c.id}
+                key={criterion.id}
                 className="rounded-xl border border-border bg-card p-4 grid grid-cols-12 gap-3 items-center shadow-sm"
               >
                 <input
-                  value={c.name}
+                  value={criterion.name}
                   onChange={(e) =>
                     setCriteria(
-                      criteria.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)),
-                    )
-                  }
-                  className="col-span-5 bg-transparent border-b border-border px-1 py-1 text-sm font-medium focus:outline-none focus:border-accent"
-                />
-                <select
-                  value={c.assignedJudge}
-                  onChange={(e) =>
-                    setCriteria(
-                      criteria.map((x, i) =>
-                        i === idx
-                          ? { ...x, assignedJudge: e.target.value as Criterion["assignedJudge"] }
-                          : x,
+                      criteria.map((item, i) =>
+                        i === index ? { ...item, name: e.target.value } : item,
                       ),
                     )
                   }
-                  className="col-span-4 rounded-lg bg-background border border-border px-2 py-1.5 text-xs font-medium text-ai focus:outline-none focus:border-accent"
+                  className="col-span-4 bg-transparent border-b border-border px-1 py-1 text-sm font-medium focus:outline-none focus:border-accent"
+                />
+                <input
+                  value={criterion.description}
+                  onChange={(e) =>
+                    setCriteria(
+                      criteria.map((item, i) =>
+                        i === index ? { ...item, description: e.target.value } : item,
+                      ),
+                    )
+                  }
+                  placeholder="What this judge should inspect"
+                  className="col-span-4 rounded-lg bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
+                />
+                <select
+                  value={criterion.agentId}
+                  onChange={(e) =>
+                    setCriteria(
+                      criteria.map((item, i) =>
+                        i === index ? { ...item, agentId: e.target.value } : item,
+                      ),
+                    )
+                  }
+                  className="col-span-2 rounded-lg bg-background border border-border px-2 py-1.5 text-xs font-medium text-ai focus:outline-none focus:border-accent"
                 >
-                  {judges.map((j) => (
-                    <option key={j.name} value={j.name}>
-                      {j.name} — {j.focus}
+                  {active_agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
                     </option>
                   ))}
                 </select>
                 <input
                   type="number"
-                  value={c.weight}
+                  value={criterion.weight}
                   onChange={(e) =>
                     setCriteria(
-                      criteria.map((x, i) =>
-                        i === idx ? { ...x, weight: Number(e.target.value) } : x,
+                      criteria.map((item, i) =>
+                        i === index ? { ...item, weight: Number(e.target.value) } : item,
                       ),
                     )
                   }
-                  className="col-span-3 rounded-lg bg-background border border-border px-2 py-1.5 text-sm font-mono text-accent text-right focus:outline-none focus:border-accent"
+                  className="col-span-2 rounded-lg bg-background border border-border px-2 py-1.5 text-sm font-mono text-accent text-right focus:outline-none focus:border-accent"
                 />
               </div>
             ))}
@@ -194,7 +283,7 @@ function CreateHackathon() {
           <div className="rounded-xl border border-border bg-card p-6 text-sm space-y-3 shadow-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Judges</span>
-              <span className="font-medium text-ai">5 agents ready</span>
+              <span className="font-medium text-ai">{active_agents.length} agents available</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Criteria</span>
@@ -211,41 +300,59 @@ function CreateHackathon() {
               <span className="font-medium">Submit → Score → Settle</span>
             </div>
             <p className="text-muted-foreground pt-3 border-t border-border leading-relaxed">
-              On submit, a Circle wallet is provisioned. Builders submit. The 5 agents score every
-              project. At deadline, USDC settles to winner wallets — no human signoff.
+              This will create a live hackathon row and its judging criteria in Supabase
+              immediately.
             </p>
           </div>
         )}
+
+        {error && <p className="text-sm text-warn">{error}</p>}
 
         <div className="pt-4 border-t border-border flex justify-between">
           <button
             type="button"
             onClick={() => setStep(Math.max(0, step - 1))}
-            disabled={step === 0}
+            disabled={step === 0 || busy}
             className="rounded-lg border border-border text-foreground px-5 py-3 text-sm font-semibold disabled:opacity-40 hover:bg-muted transition-colors"
           >
             ← Back
           </button>
-          <button
-            type="submit"
-            className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
-          >
-            {step === steps.length - 1 ? "Deploy hackathon" : "Continue →"}
-          </button>
+          {step === steps.length - 1 ? (
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={busy}
+              className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {busy ? "Creating…" : "Deploy hackathon"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setStep(step + 1)}
+              className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+            >
+              Continue →
+            </button>
+          )}
         </div>
-      </form>
+      </div>
     </div>
   );
 }
 
 function Field({
   label,
+  value,
+  onChange,
   required,
   textarea,
   type = "text",
   mono,
 }: {
   label: string;
+  value: string;
+  onChange: (value: string) => void;
   required?: boolean;
   textarea?: boolean;
   type?: string;
@@ -261,13 +368,19 @@ function Field({
         <textarea
           required={required}
           rows={3}
-          className="w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
       ) : (
         <input
           required={required}
           type={type}
-          className={`w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${mono ? "font-mono" : ""}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${
+            mono ? "font-mono" : ""
+          }`}
         />
       )}
     </div>

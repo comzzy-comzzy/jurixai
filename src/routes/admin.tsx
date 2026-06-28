@@ -1,11 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { hackathons, getHackathonProjects, ADMIN_PASSWORD } from "@/lib/mock-data";
+import { useMemo, useState } from "react";
+import { listHackathons, getHomeData } from "@/lib/jurix/data.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { fullUsdc, relativeDate } from "@/lib/format";
 
+const ADMIN_PASSWORD = "jurixai2026";
+
 export const Route = createFileRoute("/admin")({
+  loader: async () => {
+    const [hackathons, home] = await Promise.all([listHackathons(), getHomeData()]);
+    return { hackathons, home };
+  },
   head: () => ({
     meta: [
       { title: "Admin — JuriXAI" },
@@ -16,9 +22,15 @@ export const Route = createFileRoute("/admin")({
 });
 
 function Admin() {
+  const { hackathons, home } = Route.useLoaderData();
   const [authed, setAuthed] = useState(false);
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
+
+  const totalPool = useMemo(
+    () => hackathons.reduce((sum, hackathon) => sum + hackathon.prize_pool_usdc, 0),
+    [hackathons],
+  );
 
   if (!authed) {
     return (
@@ -53,9 +65,6 @@ function Admin() {
     );
   }
 
-  const totalPool = hackathons.reduce((s, h) => s + h.prizePoolUsdc, 0);
-  const totalSubs = hackathons.reduce((s, h) => s + getHackathonProjects(h.id).length, 0);
-
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <header className="mb-10 border-b border-border pb-6">
@@ -68,56 +77,58 @@ function Admin() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         {[
           { l: "Hackathons", v: String(hackathons.length) },
-          { l: "Submissions", v: String(totalSubs) },
+          { l: "Submissions", v: String(home.stats.total_submissions) },
           { l: "Pool total", v: `${fullUsdc(totalPool)} USDC` },
-          { l: "Agents online", v: "5 / 5" },
-        ].map((s) => (
-          <div key={s.l} className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <p className="text-xs font-medium text-muted-foreground mb-2">{s.l}</p>
-            <p className="text-xl font-bold tabular-nums">{s.v}</p>
+          { l: "Agents online", v: String(home.active_agents.length) },
+        ].map((item) => (
+          <div key={item.l} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <p className="text-xs font-medium text-muted-foreground mb-2">{item.l}</p>
+            <p className="text-xl font-bold tabular-nums">{item.v}</p>
           </div>
         ))}
       </div>
 
       <h2 className="text-sm font-semibold text-foreground mb-3">Hackathon registry</h2>
-      <div className="rounded-xl border border-border bg-card overflow-x-auto shadow-sm">
-        <table className="w-full text-sm min-w-[800px]">
-          <thead className="border-b border-border bg-muted/40 text-left text-xs font-medium text-muted-foreground">
-            <tr>
-              <th className="p-3 font-medium">Name</th>
-              <th className="p-3 font-medium">Status</th>
-              <th className="p-3 font-medium">Pool</th>
-              <th className="p-3 font-medium">Subs</th>
-              <th className="p-3 font-medium">Deadline</th>
-              <th className="p-3 font-medium">Wallet</th>
-              <th className="p-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {hackathons.map((h) => (
-              <tr key={h.id} className="hover:bg-muted/40 transition-colors">
-                <td className="p-3 font-semibold text-foreground">{h.name}</td>
-                <td className="p-3">
-                  <StatusPill status={h.status} />
-                </td>
-                <td className="p-3 tabular-nums font-medium text-accent">
-                  {fullUsdc(h.prizePoolUsdc)}
-                </td>
-                <td className="p-3 tabular-nums">{getHackathonProjects(h.id).length}</td>
-                <td className="p-3 text-muted-foreground">{relativeDate(h.deadline)}</td>
-                <td className="p-3">
-                  <WalletAddress address={h.circleWalletAddress} />
-                </td>
-                <td className="p-3 text-right">
-                  <button className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors">
-                    Settle
-                  </button>
-                </td>
+      {hackathons.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
+          No hackathons have been created in Supabase yet.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-x-auto shadow-sm">
+          <table className="w-full text-sm min-w-[800px]">
+            <thead className="border-b border-border bg-muted/40 text-left text-xs font-medium text-muted-foreground">
+              <tr>
+                <th className="p-3 font-medium">Name</th>
+                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 font-medium">Pool</th>
+                <th className="p-3 font-medium">Subs</th>
+                <th className="p-3 font-medium">Deadline</th>
+                <th className="p-3 font-medium">Wallet</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {hackathons.map((hackathon) => (
+                <tr key={hackathon.id} className="hover:bg-muted/40 transition-colors">
+                  <td className="p-3 font-semibold text-foreground">{hackathon.name}</td>
+                  <td className="p-3">
+                    <StatusPill status={hackathon.status} />
+                  </td>
+                  <td className="p-3 tabular-nums font-medium text-accent">
+                    {fullUsdc(hackathon.prize_pool_usdc)}
+                  </td>
+                  <td className="p-3 tabular-nums">{hackathon.submission_count}</td>
+                  <td className="p-3 text-muted-foreground">
+                    {hackathon.deadline ? relativeDate(hackathon.deadline) : "TBD"}
+                  </td>
+                  <td className="p-3">
+                    <WalletAddress address={hackathon.treasury_address ?? "Treasury pending"} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="mt-6 text-right">
         <button

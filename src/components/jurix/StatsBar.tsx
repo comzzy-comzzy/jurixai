@@ -1,14 +1,14 @@
-import { stats } from "@/lib/mock-data";
 import { formatUsdc } from "@/lib/format";
+import type { HomeStats } from "@/lib/jurix/types";
 
-const items = [
-  { label: "Active hackathons", value: stats.activeHackathons.toString(), accent: false },
-  { label: "Total submissions", value: stats.totalSubmissions.toLocaleString(), accent: false },
-  { label: "USDC distributed", value: formatUsdc(stats.usdcDistributed), accent: true },
-  { label: "Verdicts rendered", value: stats.verdictsRendered.toLocaleString(), accent: false },
-];
+export function StatsBar({ stats }: { stats: HomeStats }) {
+  const items = [
+    { label: "Active hackathons", value: stats.active_hackathons.toString(), accent: false },
+    { label: "Total submissions", value: stats.total_submissions.toLocaleString(), accent: false },
+    { label: "USDC distributed", value: formatUsdc(stats.usdc_distributed), accent: true },
+    { label: "Verdicts rendered", value: stats.verdicts_rendered.toLocaleString(), accent: false },
+  ];
 
-export function StatsBar() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {items.map((s) => (

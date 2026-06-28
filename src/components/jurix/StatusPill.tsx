@@ -1,4 +1,4 @@
-import type { HackathonStatus } from "@/lib/mock-data";
+import type { HackathonStatus } from "@/lib/jurix/types";
 
 const map: Record<HackathonStatus, string> = {
   open: "bg-accent/10 text-accent",

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, Copy, Fingerprint, LogOut, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWallet } from "@/lib/circle/useWallet";
+import { emailLoginStatus } from "@/lib/circle/userWallet.server";
 import { isEmailLoginConfigured, userWalletChain } from "@/lib/circle/userWallet";
 import { truncateAddr } from "@/lib/format";
 import logoUrl from "@/assets/jurixai-logo.png";
@@ -14,6 +15,35 @@ export function AccountButton() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("choose");
   const [email, setEmail] = useState("");
+  const [serverReady, setServerReady] = useState<boolean | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const status = await emailLoginStatus();
+        if (cancelled) return;
+        setServerReady(status.configured);
+        setServerError(
+          status.configured
+            ? null
+            : "Circle email login is not fully configured on the server. Add CIRCLE_API_KEY in Vercel.",
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setServerReady(false);
+        setServerError(err instanceof Error ? err.message : "Failed to verify Circle login setup.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // ── Connected: wallet chip + sign out ───────────────────────────────────
   if (wallet) {
@@ -41,11 +71,16 @@ export function AccountButton() {
     );
   }
 
-  const configured = isEmailLoginConfigured();
+  const configured = isEmailLoginConfigured() && serverReady !== false;
+  const setupMessage = !isEmailLoginConfigured()
+    ? "Wallet login is not configured in this environment yet (VITE_CIRCLE_APP_ID missing)."
+    : serverError;
 
   function reset() {
     setStep("choose");
     setEmail("");
+    setServerError(null);
+    setServerReady(null);
   }
 
   return (
@@ -74,10 +109,8 @@ export function AccountButton() {
             </p>
           </div>
 
-          {!configured && (
-            <p className="mt-4 rounded-lg bg-warn/10 text-warn text-xs p-3">
-              Wallet login isn&rsquo;t configured in this environment yet (App ID missing).
-            </p>
+          {setupMessage && (
+            <p className="mt-4 rounded-lg bg-warn/10 text-warn text-xs p-3">{setupMessage}</p>
           )}
 
           {/* Step: choose method */}
@@ -134,7 +167,7 @@ export function AccountButton() {
               />
               {error && <p className="text-warn text-xs">{error}</p>}
               <button
-                disabled={busy || !email.trim() || !configured}
+                disabled={busy || !email.trim() || !configured || serverReady === null}
                 onClick={async () => {
                   try {
                     await loginEmail(email.trim());
@@ -148,7 +181,11 @@ export function AccountButton() {
                 }}
                 className="w-full rounded-lg bg-accent text-accent-foreground px-4 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {busy ? "Sending code…" : "Email me a code"}
+                {busy
+                  ? "Sending code…"
+                  : serverReady === null
+                    ? "Checking setup…"
+                    : "Email me a code"}
               </button>
               <button
                 onClick={() => setStep("choose")}
