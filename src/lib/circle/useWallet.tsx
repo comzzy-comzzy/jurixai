@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { createWallet, loginWallet, type CircleWallet } from "./wallet";
+import { emailSignIn } from "./userWallet";
 
 const STORAGE_KEY = "jurixai.wallet";
 
@@ -9,6 +10,7 @@ interface WalletContextValue {
   error: string | null;
   signUp: (username: string) => Promise<void>;
   logIn: (username: string) => Promise<void>;
+  loginEmail: (email: string) => Promise<void>;
   signOut: () => void;
 }
 
@@ -57,10 +59,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback((username: string) => run(() => createWallet(username)), [run]);
   const logIn = useCallback((username: string) => run(() => loginWallet(username)), [run]);
+  const loginEmail = useCallback(
+    (email: string) =>
+      run(async () => {
+        const w = await emailSignIn(email);
+        return { username: w.email, address: w.address, chain: w.chain };
+      }),
+    [run],
+  );
   const signOut = useCallback(() => persist(null), [persist]);
 
   return (
-    <WalletContext.Provider value={{ wallet, busy, error, signUp, logIn, signOut }}>
+    <WalletContext.Provider value={{ wallet, busy, error, signUp, logIn, loginEmail, signOut }}>
       {children}
     </WalletContext.Provider>
   );
