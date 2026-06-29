@@ -40,7 +40,7 @@ function Home() {
           </div>
           <h1 className="font-semibold italic text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-balance mb-6">
             Host a hackathon. <span className="text-muted-foreground">AI agents judge it.</span>{" "}
-            <span className="text-accent">Real scoring, no mock results.</span>
+            <span className="text-accent">Winners get paid in USDC.</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl text-pretty">
             JuriXAI evaluates real submissions with specialized judge agents for code quality,

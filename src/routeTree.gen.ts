@@ -14,6 +14,7 @@ import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HackathonsIdRouteImport } from './routes/hackathons.$id'
+import { Route as ApiJudgeDeadlinesRouteImport } from './routes/api.judge-deadlines'
 import { Route as HackathonsIdSubmitRouteImport } from './routes/hackathons.$id.submit'
 import { Route as HackathonsIdProjectProjectIdRouteImport } from './routes/hackathons.$id.project.$projectId'
 
@@ -42,6 +43,11 @@ const HackathonsIdRoute = HackathonsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => HackathonsRoute,
 } as any)
+const ApiJudgeDeadlinesRoute = ApiJudgeDeadlinesRouteImport.update({
+  id: '/api/judge-deadlines',
+  path: '/api/judge-deadlines',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HackathonsIdSubmitRoute = HackathonsIdSubmitRouteImport.update({
   id: '/submit',
   path: '/submit',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
+  '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
   '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
+  '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
   '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
+  '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
   '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/create'
     | '/hackathons'
+    | '/api/judge-deadlines'
     | '/hackathons/$id'
     | '/hackathons/$id/submit'
     | '/hackathons/$id/project/$projectId'
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/create'
     | '/hackathons'
+    | '/api/judge-deadlines'
     | '/hackathons/$id'
     | '/hackathons/$id/submit'
     | '/hackathons/$id/project/$projectId'
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/create'
     | '/hackathons'
+    | '/api/judge-deadlines'
     | '/hackathons/$id'
     | '/hackathons/$id/submit'
     | '/hackathons/$id/project/$projectId'
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   CreateRoute: typeof CreateRoute
   HackathonsRoute: typeof HackathonsRouteWithChildren
+  ApiJudgeDeadlinesRoute: typeof ApiJudgeDeadlinesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/hackathons/$id'
       preLoaderRoute: typeof HackathonsIdRouteImport
       parentRoute: typeof HackathonsRoute
+    }
+    '/api/judge-deadlines': {
+      id: '/api/judge-deadlines'
+      path: '/api/judge-deadlines'
+      fullPath: '/api/judge-deadlines'
+      preLoaderRoute: typeof ApiJudgeDeadlinesRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/hackathons/$id/submit': {
       id: '/hackathons/$id/submit'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   CreateRoute: CreateRoute,
   HackathonsRoute: HackathonsRouteWithChildren,
+  ApiJudgeDeadlinesRoute: ApiJudgeDeadlinesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
