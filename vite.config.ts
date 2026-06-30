@@ -8,16 +8,20 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 // Circle's browser wallet SDK (@circle-fin/w3s-pw-web-sdk) is dynamically imported
-// in the browser, but its dependencies (jsonwebtoken/uuid) `import { Buffer } from
-// "buffer"`. The browser has no `buffer` module, so Vite stubs it to undefined and
-// `Buffer.from(...)` threw "Cannot read properties of undefined (reading 'from')"
-// during email login. Polyfill ONLY the `buffer` module + Buffer global. Scoped to
-// just `buffer` on purpose: polyfilling all Node builtins (the plugin default)
-// rewrites `node:module`/`node:crypto` and breaks the SSR/server build, whereas the
-// `buffer` polyfill works in both the browser and on Node, so it is safe everywhere.
-const bufferPolyfill = nodePolyfills({
-  include: ["buffer"],
-  globals: { Buffer: true, global: true, process: false },
+// in the browser, but its dependencies (jsonwebtoken/jws/uuid) reach for Node core
+// modules — `buffer` (Buffer.from), and `stream`/`util`/`events`/`crypto` (used via
+// util.inherits on Node streams). Browsers have none of these, so Vite stubs them to
+// undefined and email login crashed (first "reading 'from'", then "Object prototype
+// may only be an Object or null"). Polyfill exactly the builtins those deps need.
+//
+// IMPORTANT: `protocolImports: false` keeps `node:`-prefixed imports (e.g.
+// `node:module`, `node:crypto`) untouched, and we deliberately do NOT include
+// `module`/`fs`. That protects the SSR/server build (which imports `createRequire`
+// from `node:module` and uses real Node crypto for sessions/Supabase/Circle server
+// SDK) — only bare browser imports get the polyfill.
+const nodeBuiltinPolyfills = nodePolyfills({
+  include: ["buffer", "crypto", "stream", "util", "events", "string_decoder", "process", "vm"],
+  globals: { Buffer: true, global: true, process: true },
   protocolImports: false,
 });
 
@@ -32,6 +36,6 @@ export default defineConfig({
   // build is forced back to Cloudflare automatically, so the editor preview is unaffected.
   nitro: { preset: "vercel" },
   vite: {
-    plugins: [bufferPolyfill],
+    plugins: [nodeBuiltinPolyfills],
   },
 });
