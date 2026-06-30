@@ -25,6 +25,23 @@ type RepoContext = {
   evidence: string[];
 };
 
+type SubmissionSignals = {
+  hasGithub: boolean;
+  hasDemo: boolean;
+  hasVideo: boolean;
+  entryPaid: boolean;
+  hasDescription: boolean;
+  repoAccessible: boolean;
+  repoInaccessible: boolean;
+  hasReadme: boolean;
+  hasPackageJson: boolean;
+  demoPlaceholder: boolean;
+  videoPlaceholder: boolean;
+  namingMismatch: boolean;
+  deliverablesMissing: string[];
+  briefMismatch: boolean;
+};
+
 type RepoPageFallback = {
   description: string | null;
   branch: string | null;
@@ -322,6 +339,258 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
   return {
     summary: summaryLines.join("\n"),
     evidence: evidence.slice(0, 5),
+  };
+}
+
+function buildSubmissionSignals(
+  criterion: JudgingCriterion,
+  hackathon: HackathonSummary,
+  submission: SubmissionSummary,
+  repoContext: RepoContext | null,
+): SubmissionSignals {
+  const description = submission.description?.trim().toLowerCase() ?? "";
+  const brief = [
+    hackathon.name,
+    hackathon.description,
+    hackathon.submission_instructions,
+    ...hackathon.required_deliverables,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const projectName = submission.project_name.trim().toLowerCase();
+  const githubUrl = submission.github_url?.trim().toLowerCase() ?? "";
+  const demoUrl = submission.demo_url?.trim().toLowerCase() ?? "";
+  const videoUrl = submission.video_url?.trim().toLowerCase() ?? "";
+  const repoSummary = repoContext?.summary.toLowerCase() ?? "";
+  const repoEvidence = repoContext?.evidence.join(" ").toLowerCase() ?? "";
+  const combinedRepo = `${repoSummary} ${repoEvidence}`.trim();
+
+  const hasGithub = Boolean(submission.github_url?.trim());
+  const hasDemo = Boolean(submission.demo_url?.trim());
+  const hasVideo = Boolean(submission.video_url?.trim());
+  const entryPaid = submission.entry_paid;
+  const hasDescription = Boolean(submission.description?.trim());
+  const demoPlaceholder = /example\.com|placeholder|demo coming soon/.test(demoUrl);
+  const videoPlaceholder = /example\.com|placeholder|video coming soon/.test(videoUrl);
+  const repoInaccessible = /private or inaccessible to anonymous fetches/.test(combinedRepo);
+  const repoAccessible = Boolean(repoContext) && !repoInaccessible;
+  const hasReadme = /readme present/.test(repoEvidence) || /readme excerpt:/.test(repoSummary);
+  const hasPackageJson = /package\.json present/.test(repoEvidence) || /package\.json excerpt:/.test(repoSummary);
+
+  const projectTokens = unique(
+    projectName
+      .split(/[^a-z0-9]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 4),
+  );
+  const targetSurface = `${githubUrl} ${demoUrl} ${videoUrl}`.trim();
+  const namingMismatch =
+    projectTokens.length > 0 &&
+    !projectTokens.some((token) => targetSurface.includes(token)) &&
+    Boolean(targetSurface);
+
+  const deliverablesMissing = hackathon.required_deliverables
+    .filter((deliverable) => {
+      const normalized = deliverable.toLowerCase();
+      if (normalized.includes("github") || normalized.includes("repo")) return !hasGithub;
+      if (normalized.includes("demo")) return !hasDemo || demoPlaceholder;
+      if (normalized.includes("video")) return !hasVideo || videoPlaceholder;
+      if (normalized.includes("readme")) return !hasReadme;
+      return false;
+    })
+    .slice(0, 4);
+
+  const criterionText = `${criterion.name} ${criterion.description ?? ""}`.toLowerCase();
+  const commerceSignals = ["commerce", "checkout", "cart", "payment", "merchant", "store"];
+  const briefCallsForCommerce = commerceSignals.some(
+    (token) => brief.includes(token) || criterionText.includes(token),
+  );
+  const submissionShowsCommerce = commerceSignals.some(
+    (token) => description.includes(token) || projectName.includes(token) || combinedRepo.includes(token),
+  );
+  const briefMismatch = briefCallsForCommerce && !submissionShowsCommerce;
+
+  return {
+    hasGithub,
+    hasDemo,
+    hasVideo,
+    entryPaid,
+    hasDescription,
+    repoAccessible,
+    repoInaccessible,
+    hasReadme,
+    hasPackageJson,
+    demoPlaceholder,
+    videoPlaceholder,
+    namingMismatch,
+    deliverablesMissing,
+    briefMismatch,
+  };
+}
+
+function buildFallbackEvaluation(
+  agent: JudgeAgent,
+  criterion: JudgingCriterion,
+  hackathon: HackathonSummary,
+  submission: SubmissionSummary,
+  repoContext: RepoContext | null,
+  reason: string,
+): AgentEvaluation {
+  const signals = buildSubmissionSignals(criterion, hackathon, submission, repoContext);
+  const criterionText = `${criterion.name} ${criterion.description ?? ""} ${agent.focus_area}`.toLowerCase();
+  let score = 6.4;
+  let confidence = 0.64;
+  const evidence: string[] = [];
+  const flags: string[] = [];
+
+  if (signals.hasDescription) {
+    evidence.push("Project description was submitted");
+    score += 0.35;
+  } else {
+    flags.push("missing_description");
+    score -= 1.1;
+  }
+
+  if (signals.hasGithub) {
+    evidence.push(`GitHub link submitted: ${submission.github_url}`);
+    score += 0.3;
+  } else {
+    flags.push("missing_repo");
+    score -= 1.4;
+  }
+
+  if (signals.repoAccessible) {
+    evidence.push(...(repoContext?.evidence ?? []).slice(0, 2));
+    score += 0.55;
+    confidence += 0.08;
+  }
+
+  if (signals.repoInaccessible) {
+    evidence.push("Public repo inspection failed because the linked GitHub repo is not anonymously accessible");
+    flags.push("inaccessible_repo");
+    score -= 2.1;
+    confidence -= 0.16;
+  }
+
+  if (signals.hasDemo) {
+    evidence.push(`Demo link submitted: ${submission.demo_url}`);
+    score += 0.3;
+  } else {
+    flags.push("missing_demo");
+    score -= 1;
+  }
+
+  if (signals.demoPlaceholder) {
+    flags.push("placeholder_demo");
+    score -= 0.9;
+  }
+
+  if (signals.hasVideo) {
+    evidence.push(`Video link submitted: ${submission.video_url}`);
+    score += 0.2;
+  } else {
+    flags.push("missing_video");
+    score -= 0.85;
+  }
+
+  if (signals.videoPlaceholder) {
+    flags.push("placeholder_video");
+    score -= 1;
+  }
+
+  if (!signals.entryPaid) {
+    flags.push("entry_unpaid");
+    score -= 0.7;
+  }
+
+  if (signals.namingMismatch) {
+    flags.push("naming_mismatch");
+    score -= 0.7;
+  }
+
+  if (signals.deliverablesMissing.length > 0) {
+    flags.push("missing_deliverable");
+    score -= Math.min(1.4, signals.deliverablesMissing.length * 0.45);
+  }
+
+  if (signals.briefMismatch) {
+    flags.push("off_brief");
+    score -= 1.2;
+  }
+
+  if (criterionText.includes("code") || criterionText.includes("engineering") || criterionText.includes("technical")) {
+    if (signals.repoInaccessible) score -= 0.9;
+    if (signals.hasPackageJson) score += 0.45;
+    if (signals.hasReadme) score += 0.25;
+    if (!signals.hasReadme) flags.push("weak_readme");
+  } else if (
+    criterionText.includes("product") ||
+    criterionText.includes("ux") ||
+    criterionText.includes("user")
+  ) {
+    if (!signals.hasDemo || signals.demoPlaceholder) score -= 0.9;
+    if (!signals.hasDescription) score -= 0.6;
+  } else if (
+    criterionText.includes("innovation") ||
+    criterionText.includes("original") ||
+    criterionText.includes("differenti")
+  ) {
+    if (signals.briefMismatch) score -= 0.7;
+    if (signals.hasDescription && !signals.briefMismatch) score += 0.35;
+  } else if (
+    criterionText.includes("delivery") ||
+    criterionText.includes("documentation") ||
+    criterionText.includes("polish") ||
+    criterionText.includes("shipping")
+  ) {
+    if (!signals.hasReadme) score -= 0.8;
+    if (!signals.hasVideo || signals.videoPlaceholder) score -= 0.8;
+    if (signals.deliverablesMissing.length > 0) score -= 0.4;
+  }
+
+  if (evidence.length === 0) {
+    evidence.push("Scored from the submission record because no inspectable public repo evidence was available");
+    flags.push("low_evidence");
+    confidence -= 0.1;
+  }
+
+  if (signals.deliverablesMissing.length > 0) {
+    evidence.push(
+      `Missing required deliverables: ${signals.deliverablesMissing
+        .map((item) => item.replace(/\s+/g, " ").trim())
+        .join("; ")}`,
+    );
+  }
+
+  const rationaleParts = [
+    `This score is based on the submitted ${signals.hasGithub ? "repo link" : "project record"}, ${signals.hasDemo ? "demo link" : "missing demo"}, and ${signals.hasVideo ? "video evidence" : "missing video evidence"}.`,
+    signals.repoInaccessible
+      ? "The linked GitHub repository could not be inspected publicly, which reduced technical confidence."
+      : null,
+    signals.briefMismatch
+      ? "The available materials do not clearly show alignment with the commerce-focused brief."
+      : null,
+    signals.deliverablesMissing.length > 0
+      ? "Required deliverables were incomplete."
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const finalFlags = unique(flags).slice(0, 6);
+  const finalEvidence = unique(evidence).slice(0, 6);
+
+  if (reason && reason !== "Judge model returned an empty response.") {
+    finalFlags.push("fallback_scoring");
+  }
+
+  return {
+    score: Number(clamp(score, 1, 10).toFixed(2)),
+    confidence: Number(clamp(confidence, 0.2, 0.95).toFixed(2)),
+    rationale: truncate(rationaleParts, 320),
+    evidence: finalEvidence,
+    flags: unique(finalFlags).slice(0, 6),
   };
 }
 
@@ -672,5 +941,5 @@ export async function evaluateSubmissionWithModel(
     return validateEvaluation(raw);
   }
 
-  throw new Error(lastError);
+  return buildFallbackEvaluation(agent, criterion, hackathon, submission, repoContext, lastError);
 }
