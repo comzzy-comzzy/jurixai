@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { getHackathonDetail } from "@/lib/jurix/data.server";
+import { loadHackathonDetail } from "@/lib/jurix/actions.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { Countdown } from "@/components/jurix/Countdown";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
@@ -10,9 +10,11 @@ import { fullUsdc, relativeDate } from "@/lib/format";
 
 export const Route = createFileRoute("/hackathons/$id")({
   loader: async ({ params }) => {
-    const hackathon = await getHackathonDetail(params.id);
-    if (!hackathon) throw notFound();
-    return hackathon;
+    try {
+      return await loadHackathonDetail({ data: { hackathon_id: params.id } });
+    } catch {
+      throw notFound();
+    }
   },
   head: ({ loaderData }) => ({
     meta: [

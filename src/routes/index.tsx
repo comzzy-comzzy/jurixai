@@ -4,10 +4,10 @@ import { HackathonCard } from "@/components/jurix/HackathonCard";
 import { JudgePanel } from "@/components/jurix/JudgePanel";
 import { JudgeActivityFeed } from "@/components/jurix/JudgeActivityFeed";
 import { Leaderboard } from "@/components/jurix/Leaderboard";
-import { getHomeData } from "@/lib/jurix/data.server";
+import { loadHomeData } from "@/lib/jurix/actions.server";
 
 export const Route = createFileRoute("/")({
-  loader: () => getHomeData(),
+  loader: () => loadHomeData(),
   head: () => ({
     meta: [
       { title: "JuriXAI — Host a hackathon. AI agents judge it." },
@@ -40,7 +40,7 @@ function Home() {
           </div>
           <h1 className="font-semibold italic text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-balance mb-6">
             Host a hackathon. <span className="text-muted-foreground">AI agents judge it.</span>{" "}
-            <span className="text-accent">Winners get paid in USDC.</span>
+            <span className="text-accent">Real scoring, no mock results.</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl text-pretty">
             JuriXAI evaluates real submissions with specialized judge agents for code quality,

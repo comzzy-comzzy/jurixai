@@ -1,13 +1,14 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { createSubmission } from "@/lib/jurix/actions.server";
-import { getHackathonDetail } from "@/lib/jurix/data.server";
+import { createSubmission, loadHackathonDetail } from "@/lib/jurix/actions.server";
 
 export const Route = createFileRoute("/hackathons/$id/submit")({
   loader: async ({ params }) => {
-    const hackathon = await getHackathonDetail(params.id);
-    if (!hackathon) throw notFound();
-    return hackathon;
+    try {
+      return await loadHackathonDetail({ data: { hackathon_id: params.id } });
+    } catch {
+      throw notFound();
+    }
   },
   head: ({ loaderData }) => ({
     meta: [

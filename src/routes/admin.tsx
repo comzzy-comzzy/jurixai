@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { triggerHackathonJudging } from "@/lib/jurix/actions.server";
-import { listHackathons, getHomeData } from "@/lib/jurix/data.server";
+import { loadHackathons, loadHomeData, triggerHackathonJudging } from "@/lib/jurix/actions.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { fullUsdc, relativeDate } from "@/lib/format";
@@ -10,7 +9,7 @@ const ADMIN_PASSWORD = "jurixai2026";
 
 export const Route = createFileRoute("/admin")({
   loader: async () => {
-    const [hackathons, home] = await Promise.all([listHackathons(), getHomeData()]);
+    const [hackathons, home] = await Promise.all([loadHackathons(), loadHomeData()]);
     return { hackathons, home };
   },
   head: () => ({

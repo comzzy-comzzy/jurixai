@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { getSubmissionDetail } from "@/lib/jurix/data.server";
+import { loadSubmissionDetail } from "@/lib/jurix/actions.server";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { ScoreBar } from "@/components/jurix/ScoreBar";
 import { JudgeActivityFeed } from "@/components/jurix/JudgeActivityFeed";
@@ -8,9 +8,13 @@ import { ArrowUpRight, ThumbsUp } from "lucide-react";
 
 export const Route = createFileRoute("/hackathons/$id/project/$projectId")({
   loader: async ({ params }) => {
-    const detail = await getSubmissionDetail(params.id, params.projectId);
-    if (!detail) throw notFound();
-    return detail;
+    try {
+      return await loadSubmissionDetail({
+        data: { hackathon_id: params.id, submission_id: params.projectId },
+      });
+    } catch {
+      throw notFound();
+    }
   },
   head: ({ loaderData }) => ({
     meta: [

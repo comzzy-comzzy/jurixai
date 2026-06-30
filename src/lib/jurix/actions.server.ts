@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
-import { getHackathonDetail } from "./data.server";
+import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons } from "./data.server";
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 
 type HackathonCriterionInput = {
@@ -29,7 +29,7 @@ type CreateSubmissionInput = {
   description: string;
   github_url: string;
   demo_url?: string;
-  video_url: string;
+  video_url?: string;
   payout_address: string;
 };
 
@@ -117,6 +117,30 @@ export const createSubmission = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     return { id: created.id };
+  });
+
+export const loadHomeData = createServerFn({ method: "GET" }).handler(async () => getHomeData());
+
+export const loadHackathons = createServerFn({ method: "GET" }).handler(async () => listHackathons());
+
+export const loadHackathonDetail = createServerFn({ method: "GET" })
+  .validator((data: { hackathon_id: string }) => data)
+  .handler(async ({ data }) => {
+    const hackathon = await getHackathonDetail(data.hackathon_id);
+    if (!hackathon) {
+      throw new Error("Hackathon not found.");
+    }
+    return hackathon;
+  });
+
+export const loadSubmissionDetail = createServerFn({ method: "GET" })
+  .validator((data: { hackathon_id: string; submission_id: string }) => data)
+  .handler(async ({ data }) => {
+    const submission = await getSubmissionDetail(data.hackathon_id, data.submission_id);
+    if (!submission) {
+      throw new Error("Submission not found.");
+    }
+    return submission;
   });
 
 export const triggerHackathonJudging = createServerFn({ method: "POST" })

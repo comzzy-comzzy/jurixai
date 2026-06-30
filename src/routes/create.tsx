@@ -1,10 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { createHackathon } from "@/lib/jurix/actions.server";
-import { getHomeData } from "@/lib/jurix/data.server";
+import { createHackathon, loadHomeData } from "@/lib/jurix/actions.server";
 
 export const Route = createFileRoute("/create")({
-  loader: () => getHomeData(),
+  loader: () => loadHomeData(),
   head: () => ({
     meta: [
       { title: "Host a Hackathon — JuriXAI" },
