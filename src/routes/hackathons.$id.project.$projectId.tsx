@@ -164,6 +164,35 @@ function ProjectDetail() {
 
       <section className="mb-12">
         <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-sm font-semibold text-foreground">Hackathon instructions this project was judged against</h2>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-5">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Submission brief</p>
+            <p className="text-sm leading-relaxed text-foreground">
+              {project.hackathon.submission_instructions ?? "No submission instructions were provided."}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Required deliverables</p>
+            {project.hackathon.required_deliverables.length > 0 ? (
+              <ul className="space-y-2 text-sm text-foreground">
+                {project.hackathon.required_deliverables.map((item, index) => (
+                  <li key={index} className="rounded-md bg-background px-3 py-2">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">No required deliverables were listed.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-12">
+        <div className="flex items-center gap-3 mb-4">
           <h2 className="text-sm font-semibold text-foreground">Submitted project details</h2>
           <div className="h-px flex-1 bg-border" />
         </div>

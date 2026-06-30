@@ -25,6 +25,28 @@ type Criterion = {
   agentId: string;
 };
 
+function buildHackathonDescription(
+  summary: string,
+  submissionInstructions: string,
+  requiredDeliverables: string[],
+) {
+  const deliverables = requiredDeliverables
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => `- ${item}`)
+    .join("\n");
+
+  return [
+    summary.trim(),
+    "",
+    "Submission Instructions:",
+    submissionInstructions.trim(),
+    "",
+    "Required Deliverables:",
+    deliverables || "- Not provided",
+  ].join("\n");
+}
+
 function CreateHackathon() {
   const navigate = useNavigate();
   const { active_agents } = Route.useLoaderData();
@@ -36,6 +58,8 @@ function CreateHackathon() {
     organizerName: "",
     organizerEmail: "",
     description: "",
+    submissionInstructions: "",
+    requiredDeliverables: ["GitHub repository", "Live demo URL", "Demo video URL"],
     startDate: "",
     deadline: "",
     prizePoolUsdc: "25000",
@@ -70,7 +94,11 @@ function CreateHackathon() {
       const result = await createHackathon({
         data: {
           name: form.name,
-          description: form.description,
+          description: buildHackathonDescription(
+            form.description,
+            form.submissionInstructions,
+            form.requiredDeliverables,
+          ),
           organizer_name: form.organizerName,
           organizer_email: form.organizerEmail,
           prize_pool_usdc: Number(form.prizePoolUsdc),
@@ -151,6 +179,33 @@ function CreateHackathon() {
               required
               textarea
             />
+            <Field
+              label="Submission instructions"
+              value={form.submissionInstructions}
+              onChange={(value) => setForm({ ...form, submissionInstructions: value })}
+              required
+              textarea
+            />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Required deliverables
+                <span className="text-accent ml-1">*</span>
+              </label>
+              <div className="space-y-2">
+                {form.requiredDeliverables.map((value, index) => (
+                  <input
+                    key={index}
+                    value={value}
+                    onChange={(e) => {
+                      const next = [...form.requiredDeliverables];
+                      next[index] = e.target.value;
+                      setForm({ ...form, requiredDeliverables: next });
+                    }}
+                    className="w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  />
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <Field
                 label="Start date"
@@ -287,6 +342,10 @@ function CreateHackathon() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Criteria</span>
               <span className="font-medium">{criteria.length} defined</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Required deliverables</span>
+              <span className="font-medium">{form.requiredDeliverables.filter(Boolean).length} listed</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Weight total</span>

@@ -76,11 +76,68 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
+function parseHackathonContent(description: string | null): {
+  summary: string | null;
+  submissionInstructions: string | null;
+  requiredDeliverables: string[];
+} {
+  if (!description) {
+    return {
+      summary: null,
+      submissionInstructions: null,
+      requiredDeliverables: [],
+    };
+  }
+
+  const instructionsMarker = "\n\nSubmission Instructions:\n";
+  const deliverablesMarker = "\n\nRequired Deliverables:\n";
+  const instructionsIndex = description.indexOf(instructionsMarker);
+
+  if (instructionsIndex === -1) {
+    return {
+      summary: description.trim() || null,
+      submissionInstructions: null,
+      requiredDeliverables: [],
+    };
+  }
+
+  const summary = description.slice(0, instructionsIndex).trim() || null;
+  const afterInstructions = description.slice(instructionsIndex + instructionsMarker.length);
+  const deliverablesIndex = afterInstructions.indexOf(deliverablesMarker.trimStart());
+
+  if (deliverablesIndex === -1) {
+    return {
+      summary,
+      submissionInstructions: afterInstructions.trim() || null,
+      requiredDeliverables: [],
+    };
+  }
+
+  const submissionInstructions = afterInstructions.slice(0, deliverablesIndex).trim() || null;
+  const deliverablesText = afterInstructions
+    .slice(deliverablesIndex + deliverablesMarker.trimStart().length)
+    .trim();
+
+  const requiredDeliverables = deliverablesText
+    .split(/\r?\n/)
+    .map((item) => item.replace(/^-+\s*/, "").trim())
+    .filter(Boolean);
+
+  return {
+    summary,
+    submissionInstructions,
+    requiredDeliverables,
+  };
+}
+
 function normalizeHackathon(row: Record<string, unknown>, submissionCount = 0): HackathonSummary {
+  const parsed = parseHackathonContent(row.description ? String(row.description) : null);
   return {
     id: String(row.id),
     name: String(row.name),
-    description: row.description ? String(row.description) : null,
+    description: parsed.summary,
+    submission_instructions: parsed.submissionInstructions,
+    required_deliverables: parsed.requiredDeliverables,
     organizer_name: row.organizer_name ? String(row.organizer_name) : null,
     organizer_email: row.organizer_email ? String(row.organizer_email) : null,
     prize_pool_usdc: toNumber(row.prize_pool_usdc),

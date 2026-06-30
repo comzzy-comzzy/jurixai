@@ -32,6 +32,8 @@ export interface HackathonSummary {
   id: string;
   name: string;
   description: string | null;
+  submission_instructions: string | null;
+  required_deliverables: string[];
   organizer_name: string | null;
   organizer_email: string | null;
   prize_pool_usdc: number;

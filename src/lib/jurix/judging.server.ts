@@ -5,87 +5,12 @@ import type {
   JudgingCriterion,
   SubmissionSummary,
 } from "@/lib/jurix/types";
+import {
+  evaluateSubmissionWithModel,
+  hasJudgeModelConfig,
+  type AgentEvaluation,
+} from "@/lib/jurix/judge-model.server";
 import { getHackathonDetail, listHackathons } from "./data.server";
-
-type AgentEvaluation = {
-  score: number;
-  confidence: number;
-  rationale: string;
-  evidence: string[];
-  flags: string[];
-};
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function safeUrlScore(url: string | null): number {
-  return url ? 1 : 0;
-}
-
-function evaluateSubmission(
-  agent: JudgeAgent,
-  criterion: JudgingCriterion,
-  submission: SubmissionSummary,
-): AgentEvaluation {
-  const repo = safeUrlScore(submission.github_url);
-  const demo = safeUrlScore(submission.demo_url);
-  const video = safeUrlScore(submission.video_url);
-  const descriptionLength = submission.description?.trim().length ?? 0;
-  const docsSignal = clamp(descriptionLength / 160, 0, 1);
-
-  let scoreBase = 5;
-  const evidence: string[] = [];
-  const flags: string[] = [];
-
-  if (agent.slug === "vex-01") {
-    scoreBase += repo * 2.2 + docsSignal * 1.2 + demo * 0.6;
-    evidence.push(
-      submission.github_url ? `GitHub repo present: ${submission.github_url}` : "No GitHub repo linked.",
-      submission.description ? "Submission includes implementation summary." : "No implementation summary supplied.",
-    );
-    if (!submission.github_url) flags.push("missing_repo");
-  } else if (agent.slug === "kael-02") {
-    scoreBase += demo * 2 + video * 1.3 + docsSignal * 1.1;
-    evidence.push(
-      submission.demo_url ? `Live demo present: ${submission.demo_url}` : "No live demo linked.",
-      submission.video_url ? `Video present: ${submission.video_url}` : "No walkthrough video linked.",
-    );
-    if (!submission.demo_url) flags.push("missing_demo");
-  } else if (agent.slug === "oryn-03") {
-    const noveltySignal = clamp((descriptionLength % 90) / 90, 0, 1);
-    scoreBase += repo * 1 + docsSignal * 0.8 + noveltySignal * 2.2;
-    evidence.push(
-      submission.description
-        ? "Idea description available for originality review."
-        : "No concept description supplied for originality review.",
-    );
-    if (descriptionLength < 40) flags.push("low_context");
-  } else {
-    scoreBase += repo * 1.2 + demo * 1.2 + video * 1.6 + docsSignal * 1.5;
-    evidence.push(
-      submission.video_url ? "Walkthrough video is available." : "Walkthrough video missing.",
-      submission.github_url ? "Repository exists for reproduction." : "Repository missing for reproduction.",
-    );
-    if (!submission.video_url) flags.push("missing_video");
-  }
-
-  if (!submission.entry_paid) {
-    flags.push("entry_unpaid");
-    scoreBase -= 0.5;
-  }
-
-  const score = clamp(Number(scoreBase.toFixed(2)), 1, 10);
-  const confidence = clamp(Number((0.6 + (evidence.length - flags.length) * 0.08).toFixed(2)), 0.2, 0.98);
-
-  return {
-    score,
-    confidence,
-    rationale: `${agent.name} scored ${criterion.name} based on the available repo, demo, video, and submission context.`,
-    evidence,
-    flags,
-  };
-}
 
 async function ensureRunItems(
   runId: string,
@@ -228,6 +153,11 @@ export async function runHackathonJudging(
   if (!hasSupabaseServerConfig()) {
     throw new Error("Supabase is not configured.");
   }
+  if (!hasJudgeModelConfig()) {
+    throw new Error(
+      "Real judging is not configured. Set JURIX_JUDGE_API_KEY and JURIX_JUDGE_MODEL before running agent evaluations.",
+    );
+  }
 
   if (hackathon.submissions.length === 0) {
     throw new Error("No submissions available to judge.");
@@ -248,7 +178,12 @@ export async function runHackathonJudging(
       if (!agent) continue;
 
       for (const submission of hackathon.submissions) {
-        const evaluation = evaluateSubmission(agent, criterion, submission);
+        const evaluation = await evaluateSubmissionWithModel(
+          agent,
+          criterion,
+          hackathon,
+          submission,
+        );
         await writeScore(run.id, submission, criterion, agent, evaluation);
         scored += 1;
       }
