@@ -32,6 +32,12 @@ type RepoPageFallback = {
   readmeText: string | null;
 };
 
+type FetchResult<T> = {
+  ok: boolean;
+  status: number;
+  data: T | null;
+};
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -90,6 +96,9 @@ async function fetchJson<T>(url: string): Promise<T | null> {
     headers: {
       accept: "application/vnd.github+json",
       "user-agent": "jurixai-judge-bot",
+      ...(process.env.GITHUB_TOKEN?.trim()
+        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+        : {}),
     },
   });
 
@@ -102,11 +111,50 @@ async function fetchText(url: string): Promise<string | null> {
     headers: {
       accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
       "user-agent": "jurixai-judge-bot",
+      ...(process.env.GITHUB_TOKEN?.trim()
+        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+        : {}),
     },
   });
 
   if (!response.ok) return null;
   return await response.text();
+}
+
+async function fetchJsonDetailed<T>(url: string): Promise<FetchResult<T>> {
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/vnd.github+json",
+      "user-agent": "jurixai-judge-bot",
+      ...(process.env.GITHUB_TOKEN?.trim()
+        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+        : {}),
+    },
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    data: response.ok ? ((await response.json()) as T) : null,
+  };
+}
+
+async function fetchTextDetailed(url: string): Promise<FetchResult<string>> {
+  const response = await fetch(url, {
+    headers: {
+      accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+      "user-agent": "jurixai-judge-bot",
+      ...(process.env.GITHUB_TOKEN?.trim()
+        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+        : {}),
+    },
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    data: response.ok ? await response.text() : null,
+  };
 }
 
 function parseRepoPageFallback(
@@ -148,7 +196,7 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
   const repoRef = parseGitHubRepo(githubUrl);
   if (!repoRef) return null;
 
-  const repoMeta = await fetchJson<{
+  const repoMetaResult = await fetchJsonDetailed<{
     full_name?: string;
     default_branch?: string;
     stargazers_count?: number;
@@ -156,12 +204,17 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
     description?: string | null;
     language?: string | null;
   }>(`https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`);
+  const repoMeta = repoMetaResult.data;
 
-  const rootEntries = await fetchJson<Array<{ name?: string; type?: string }>>(
+  const rootEntriesResult = await fetchJsonDetailed<Array<{ name?: string; type?: string }>>(
     `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}/contents`,
   );
+  const rootEntries = rootEntriesResult.data;
 
-  const repoPageHtml = await fetchText(`https://github.com/${repoRef.owner}/${repoRef.repo}`);
+  const repoPageHtmlResult = await fetchTextDetailed(
+    `https://github.com/${repoRef.owner}/${repoRef.repo}`,
+  );
+  const repoPageHtml = repoPageHtmlResult.data;
   const repoPageFallback = repoPageHtml
     ? parseRepoPageFallback(repoPageHtml, repoRef.owner, repoRef.repo)
     : null;
@@ -173,14 +226,20 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
   );
 
   let readme: string | null = null;
+  const readmeStatuses: number[] = [];
   for (const branch of branchCandidates) {
-    readme =
-      (await fetchText(
-        `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/README.md`,
-      )) ??
-      (await fetchText(
+    const upperReadme = await fetchTextDetailed(
+      `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/README.md`,
+    );
+    readmeStatuses.push(upperReadme.status);
+    readme = upperReadme.data;
+    if (!readme?.trim()) {
+      const lowerReadme = await fetchTextDetailed(
         `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/readme.md`,
-      ));
+      );
+      readmeStatuses.push(lowerReadme.status);
+      readme = lowerReadme.data;
+    }
     if (readme?.trim()) break;
   }
   if (!readme?.trim()) {
@@ -188,10 +247,13 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
   }
 
   let packageJson: string | null = null;
+  const packageStatuses: number[] = [];
   for (const branch of branchCandidates) {
-    packageJson = await fetchText(
+    const packageResult = await fetchTextDetailed(
       `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/package.json`,
     );
+    packageStatuses.push(packageResult.status);
+    packageJson = packageResult.data;
     if (packageJson?.trim()) break;
   }
 
@@ -227,12 +289,26 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
     evidence.push("package.json present");
   }
 
+  const likelyPrivateOrRestricted =
+    repoMetaResult.status === 404 &&
+    rootEntriesResult.status === 404 &&
+    repoPageHtmlResult.status === 404 &&
+    readmeStatuses.some((status) => status === 404) &&
+    packageStatuses.some((status) => status === 404);
+
+  if (likelyPrivateOrRestricted) {
+    evidence.push("Repository is private or inaccessible to anonymous fetches");
+  }
+
   const summaryLines = [
     repoMeta?.description
       ? `Repo description: ${repoMeta.description}`
       : repoPageFallback?.description
         ? `Repo description: ${repoPageFallback.description}`
         : null,
+    likelyPrivateOrRestricted
+      ? "Repo access note: GitHub returned 404 for anonymous API, raw, and web requests. This usually means the repository is private or otherwise not publicly accessible from the judging runtime."
+      : null,
     repoMeta?.language ? `Primary language: ${repoMeta.language}` : null,
     rootFileNames.length > 0
       ? `Root files: ${rootFileNames.slice(0, 12).join(", ")}`
