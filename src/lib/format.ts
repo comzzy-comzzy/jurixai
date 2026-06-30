@@ -3,14 +3,19 @@ export function truncateAddr(addr: string, head = 6, tail = 4): string {
   return `${addr.slice(0, head)}...${addr.slice(-tail)}`;
 }
 
-export function formatUsdc(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n}`;
+function safeNumber(value: number | null | undefined): number {
+  return Number.isFinite(value) ? Number(value) : 0;
 }
 
-export function fullUsdc(n: number): string {
-  return n.toLocaleString("en-US");
+export function formatUsdc(n: number | null | undefined): string {
+  const value = safeNumber(n);
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
+  return `$${value}`;
+}
+
+export function fullUsdc(n: number | null | undefined): string {
+  return safeNumber(n).toLocaleString("en-US");
 }
 
 export function countdown(toIso: string): string {

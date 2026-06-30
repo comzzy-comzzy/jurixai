@@ -31,7 +31,7 @@ export function JudgeRow({ judge }: { judge: JudgeAgent }) {
         className="size-12 shrink-0 grid place-items-center rounded-full"
         style={{ background: `${c}1f`, color: c }}
       >
-        <span className="text-sm font-bold">{judge.initial}</span>
+        <span className="text-sm font-bold">{judge.short_code}</span>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center gap-2">
@@ -85,7 +85,7 @@ export function JudgeGrid({ judges }: { judges: JudgeAgent[] }) {
               className="size-14 grid place-items-center rounded-full"
               style={{ background: `${c}1f`, color: c }}
             >
-              <span className="text-base font-bold">{j.initial}</span>
+              <span className="text-base font-bold">{j.short_code}</span>
             </div>
             <div className="text-center">
               <p className="text-lg font-bold tracking-tight" style={{ color: c }}>

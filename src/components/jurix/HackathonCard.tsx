@@ -7,7 +7,6 @@ import { ArrowUpRight } from "lucide-react";
 
 export function HackathonCard({
   hackathon,
-  index,
   submissionCount,
 }: {
   hackathon: HackathonSummary;
@@ -29,14 +28,16 @@ export function HackathonCard({
         <h3 className="text-xl font-bold tracking-tight mb-1 group-hover:text-accent transition-colors">
           {hackathon.name}
         </h3>
-        <p className="text-sm text-muted-foreground">by {hackathon.organizerName}</p>
+        <p className="text-sm text-muted-foreground">
+          by {hackathon.organizer_name ?? "Unknown organizer"}
+        </p>
       </div>
       <div className="mt-auto space-y-4">
         <div className="flex justify-between items-end">
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-0.5">Prize pool</p>
             <p className="text-xl font-bold tabular-nums">
-              {fullUsdc(hackathon.prizePoolUsdc)}{" "}
+              {fullUsdc(hackathon.prize_pool_usdc)}{" "}
               <span className="text-sm font-semibold text-muted-foreground">USDC</span>
             </p>
           </div>
