@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { listHackathons } from "@/lib/jurix/data.server";
+import { loadHackathons } from "@/lib/jurix/actions.server";
 import type { HackathonStatus } from "@/lib/jurix/types";
 import { HackathonCard } from "@/components/jurix/HackathonCard";
 
 export const Route = createFileRoute("/hackathons")({
-  loader: () => listHackathons(),
+  loader: () => loadHackathons(),
   head: () => ({
     meta: [
       { title: "Browse Hackathons — JuriXAI" },
