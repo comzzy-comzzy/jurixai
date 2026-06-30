@@ -25,6 +25,13 @@ type RepoContext = {
   evidence: string[];
 };
 
+type RepoPageFallback = {
+  description: string | null;
+  branch: string | null;
+  rootFiles: string[];
+  readmeText: string | null;
+};
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -43,6 +50,23 @@ function optional(value: string | null | undefined): string {
 
 function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max)}...`;
+}
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function stripHtml(value: string): string {
+  return decodeHtml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
 
 function parseGitHubRepo(url: string | null): { owner: string; repo: string } | null {
@@ -76,13 +100,48 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 async function fetchText(url: string): Promise<string | null> {
   const response = await fetch(url, {
     headers: {
-      accept: "application/vnd.github.raw+json",
+      accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
       "user-agent": "jurixai-judge-bot",
     },
   });
 
   if (!response.ok) return null;
   return await response.text();
+}
+
+function parseRepoPageFallback(
+  html: string,
+  owner: string,
+  repo: string,
+): RepoPageFallback | null {
+  if (!html.trim()) return null;
+
+  const repoPath = `/${owner}/${repo}/`;
+  const branchMatches = [
+    ...html.matchAll(
+      new RegExp(`${repoPath}(?:blob|tree)/([^/"?#]+)/([^"?#]+)`, "g"),
+    ),
+  ];
+  const branch = branchMatches[0]?.[1] ?? null;
+  const rootFiles = unique(
+    branchMatches
+      .map((match) => match[2]?.split("/")[0]?.trim())
+      .filter((value): value is string => Boolean(value)),
+  ).slice(0, 16);
+
+  const description =
+    html.match(/<meta\s+name="description"\s+content="([^"]+)"/i)?.[1]?.trim() ?? null;
+
+  const readmeMatch =
+    html.match(/<article[^>]*markdown-body[^>]*>([\s\S]*?)<\/article>/i) ??
+    html.match(/<div[^>]*id="readme"[^>]*>([\s\S]*?)<\/div>/i);
+
+  return {
+    description: description ? decodeHtml(description) : null,
+    branch,
+    rootFiles,
+    readmeText: readmeMatch ? stripHtml(readmeMatch[1]) : null,
+  };
 }
 
 async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | null> {
@@ -102,22 +161,60 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
     `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}/contents`,
   );
 
-  const readme = await fetchText(
-    `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${repoMeta?.default_branch ?? "main"}/README.md`,
+  const repoPageHtml = await fetchText(`https://github.com/${repoRef.owner}/${repoRef.repo}`);
+  const repoPageFallback = repoPageHtml
+    ? parseRepoPageFallback(repoPageHtml, repoRef.owner, repoRef.repo)
+    : null;
+
+  const branchCandidates = unique(
+    [repoMeta?.default_branch, repoPageFallback?.branch, "main", "master"].filter(
+      (value): value is string => Boolean(value),
+    ),
   );
 
-  const packageJson = await fetchText(
-    `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${repoMeta?.default_branch ?? "main"}/package.json`,
-  );
+  let readme: string | null = null;
+  for (const branch of branchCandidates) {
+    readme =
+      (await fetchText(
+        `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/README.md`,
+      )) ??
+      (await fetchText(
+        `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/readme.md`,
+      ));
+    if (readme?.trim()) break;
+  }
+  if (!readme?.trim()) {
+    readme = repoPageFallback?.readmeText ?? null;
+  }
+
+  let packageJson: string | null = null;
+  for (const branch of branchCandidates) {
+    packageJson = await fetchText(
+      `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${branch}/package.json`,
+    );
+    if (packageJson?.trim()) break;
+  }
+
+  const rootFileNames =
+    rootEntries?.map((entry) => entry.name ?? "unknown").filter(Boolean) ??
+    repoPageFallback?.rootFiles ??
+    [];
 
   const evidence: string[] = [];
   if (repoMeta?.full_name) evidence.push(`Repository: ${repoMeta.full_name}`);
-  if (repoMeta?.language) evidence.push(`Primary language: ${repoMeta.language}`);
-  if (rootEntries?.length) {
+  else evidence.push(`Repository: ${repoRef.owner}/${repoRef.repo}`);
+  if (repoMeta?.language) {
+    evidence.push(`Primary language: ${repoMeta.language}`);
+  } else if (repoPageFallback?.description) {
+    evidence.push(`Repo page found for ${repoRef.owner}/${repoRef.repo}`);
+  }
+  if (rootEntries?.length || rootFileNames.length > 0) {
     evidence.push(
-      `Root entries: ${rootEntries
+      `Root entries: ${rootFileNames
         .slice(0, 8)
-        .map((entry) => `${entry.name ?? "unknown"} (${entry.type ?? "unknown"})`)
+        .map((entry, index) =>
+          rootEntries?.[index]?.type ? `${entry} (${rootEntries[index]?.type ?? "unknown"})` : entry,
+        )
         .join(", ")}`,
     );
   }
@@ -131,13 +228,14 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
   }
 
   const summaryLines = [
-    repoMeta?.description ? `Repo description: ${repoMeta.description}` : null,
+    repoMeta?.description
+      ? `Repo description: ${repoMeta.description}`
+      : repoPageFallback?.description
+        ? `Repo description: ${repoPageFallback.description}`
+        : null,
     repoMeta?.language ? `Primary language: ${repoMeta.language}` : null,
-    rootEntries?.length
-      ? `Root files: ${rootEntries
-          .slice(0, 12)
-          .map((entry) => entry.name ?? "unknown")
-          .join(", ")}`
+    rootFileNames.length > 0
+      ? `Root files: ${rootFileNames.slice(0, 12).join(", ")}`
       : "Root files unavailable.",
     readme?.trim() ? `README excerpt: ${truncate(readme.trim().replace(/\s+/g, " "), 1800)}` : null,
     packageJson?.trim()
