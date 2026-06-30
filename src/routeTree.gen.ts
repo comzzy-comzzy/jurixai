@@ -13,6 +13,7 @@ import { Route as HackathonsRouteImport } from './routes/hackathons'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as HackathonsIndexRouteImport } from './routes/hackathons.index'
 import { Route as HackathonsIdRouteImport } from './routes/hackathons.$id'
 import { Route as ApiJudgeDeadlinesRouteImport } from './routes/api.judge-deadlines'
 import { Route as HackathonsIdSubmitRouteImport } from './routes/hackathons.$id.submit'
@@ -37,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const HackathonsIndexRoute = HackathonsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => HackathonsRoute,
 } as any)
 const HackathonsIdRoute = HackathonsIdRouteImport.update({
   id: '/$id',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/hackathons': typeof HackathonsRouteWithChildren
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/': typeof HackathonsIndexRoute
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
   '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
 }
@@ -74,9 +81,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
-  '/hackathons': typeof HackathonsRouteWithChildren
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons': typeof HackathonsIndexRoute
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
   '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
 }
@@ -88,6 +95,7 @@ export interface FileRoutesById {
   '/hackathons': typeof HackathonsRouteWithChildren
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
+  '/hackathons/': typeof HackathonsIndexRoute
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
   '/hackathons/$id/project/$projectId': typeof HackathonsIdProjectProjectIdRoute
 }
@@ -100,6 +108,7 @@ export interface FileRouteTypes {
     | '/hackathons'
     | '/api/judge-deadlines'
     | '/hackathons/$id'
+    | '/hackathons/'
     | '/hackathons/$id/submit'
     | '/hackathons/$id/project/$projectId'
   fileRoutesByTo: FileRoutesByTo
@@ -107,9 +116,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/create'
-    | '/hackathons'
     | '/api/judge-deadlines'
     | '/hackathons/$id'
+    | '/hackathons'
     | '/hackathons/$id/submit'
     | '/hackathons/$id/project/$projectId'
   id:
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/hackathons'
     | '/api/judge-deadlines'
     | '/hackathons/$id'
+    | '/hackathons/'
     | '/hackathons/$id/submit'
     | '/hackathons/$id/project/$projectId'
   fileRoutesById: FileRoutesById
@@ -161,6 +171,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/hackathons/': {
+      id: '/hackathons/'
+      path: '/'
+      fullPath: '/hackathons/'
+      preLoaderRoute: typeof HackathonsIndexRouteImport
+      parentRoute: typeof HackathonsRoute
     }
     '/hackathons/$id': {
       id: '/hackathons/$id'
@@ -209,10 +226,12 @@ const HackathonsIdRouteWithChildren = HackathonsIdRoute._addFileChildren(
 
 interface HackathonsRouteChildren {
   HackathonsIdRoute: typeof HackathonsIdRouteWithChildren
+  HackathonsIndexRoute: typeof HackathonsIndexRoute
 }
 
 const HackathonsRouteChildren: HackathonsRouteChildren = {
   HackathonsIdRoute: HackathonsIdRouteWithChildren,
+  HackathonsIndexRoute: HackathonsIndexRoute,
 }
 
 const HackathonsRouteWithChildren = HackathonsRoute._addFileChildren(
