@@ -432,6 +432,66 @@ function normalizeStringArray(value: string): string[] {
     .slice(0, 3);
 }
 
+function extractTextFromUnknown(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractTextFromUnknown(item))
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return [
+      extractTextFromUnknown(record.output_text),
+      extractTextFromUnknown(record.text),
+      extractTextFromUnknown(record.content),
+      extractTextFromUnknown(record.reasoning),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  return "";
+}
+
+async function requestJudgeModel(
+  endpoint: string,
+  apiKey: string,
+  body: unknown,
+): Promise<{
+  ok: boolean;
+  status: number;
+  bodyText: string;
+  json: Record<string, unknown> | null;
+}> {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const bodyText = await response.text();
+  let json: Record<string, unknown> | null = null;
+  try {
+    json = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null;
+  } catch {
+    json = null;
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    bodyText,
+    json,
+  };
+}
+
 function validateEvaluation(raw: string): AgentEvaluation {
   const text = stripReasoningPreamble(raw);
   const fields = new Map<string, string>();
@@ -476,62 +536,6 @@ export async function evaluateSubmissionWithModel(
 ): Promise<AgentEvaluation> {
   const repoContext = await loadRepoContext(submission.github_url);
   const config = getJudgeModelConfig();
-  const body =
-    config.provider === "minimax" || config.provider === "openai_compat"
-      ? {
-          model: config.model,
-          messages: [
-            { role: "system", content: buildSystemPrompt(agent, criterion) },
-            { role: "user", content: buildUserPrompt(hackathon, submission, repoContext) },
-          ],
-          temperature: 0.2,
-          max_tokens: 420,
-        }
-      : {
-          model: config.model,
-          input: [
-            {
-              role: "system",
-              content: [{ type: "input_text", text: buildSystemPrompt(agent, criterion) }],
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: buildUserPrompt(hackathon, submission, repoContext),
-                },
-              ],
-            },
-          ],
-          text: {
-            format: {
-              type: "json_schema",
-              name: "jurixai_judge_evaluation",
-              schema: {
-                type: "object",
-                additionalProperties: false,
-                required: ["score", "confidence", "rationale", "evidence", "flags"],
-                properties: {
-                  score: { type: "number", minimum: 1, maximum: 10 },
-                  confidence: { type: "number", minimum: 0, maximum: 1 },
-                  rationale: { type: "string", minLength: 1, maxLength: 1200 },
-                  evidence: {
-                    type: "array",
-                    items: { type: "string", minLength: 1, maxLength: 240 },
-                    maxItems: 6,
-                  },
-                  flags: {
-                    type: "array",
-                    items: { type: "string", minLength: 1, maxLength: 64 },
-                    maxItems: 6,
-                  },
-                },
-              },
-            },
-          },
-        };
-
   const endpoint =
     config.provider === "minimax" || config.provider === "openai_compat"
       ? `${config.baseUrl.replace(/\/$/, "")}/text/chatcompletion_v2`
@@ -541,44 +545,132 @@ export async function evaluateSubmissionWithModel(
     config.provider === "openai_compat"
       ? `${config.baseUrl.replace(/\/$/, "")}/chat/completions`
       : endpoint;
+  const requestBodies =
+    config.provider === "minimax" || config.provider === "openai_compat"
+      ? [
+          {
+            model: config.model,
+            messages: [
+              { role: "system", content: buildSystemPrompt(agent, criterion) },
+              { role: "user", content: buildUserPrompt(hackathon, submission, repoContext) },
+            ],
+            temperature: 0.2,
+            max_tokens: 420,
+          },
+        ]
+      : [
+          {
+            model: config.model,
+            input: [
+              {
+                role: "system",
+                content: [{ type: "input_text", text: buildSystemPrompt(agent, criterion) }],
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: buildUserPrompt(hackathon, submission, repoContext),
+                  },
+                ],
+              },
+            ],
+            text: {
+              format: {
+                type: "json_schema",
+                name: "jurixai_judge_evaluation",
+                schema: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["score", "confidence", "rationale", "evidence", "flags"],
+                  properties: {
+                    score: { type: "number", minimum: 1, maximum: 10 },
+                    confidence: { type: "number", minimum: 0, maximum: 1 },
+                    rationale: { type: "string", minLength: 1, maxLength: 1200 },
+                    evidence: {
+                      type: "array",
+                      items: { type: "string", minLength: 1, maxLength: 240 },
+                      maxItems: 6,
+                    },
+                    flags: {
+                      type: "array",
+                      items: { type: "string", minLength: 1, maxLength: 64 },
+                      maxItems: 6,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          {
+            model: config.model,
+            input: [
+              {
+                role: "system",
+                content: [{ type: "input_text", text: buildSystemPrompt(agent, criterion) }],
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: buildUserPrompt(hackathon, submission, repoContext),
+                  },
+                ],
+              },
+            ],
+          },
+        ];
 
-  const response = await fetch(finalEndpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let lastError = "Judge model returned an empty response.";
 
-  if (!response.ok) {
-    const bodyText = await response.text();
-    throw new Error(`Judge model request failed (${response.status}): ${bodyText.slice(0, 400)}`);
+  for (const body of requestBodies) {
+    const result = await requestJudgeModel(finalEndpoint, config.apiKey, body);
+    if (!result.ok) {
+      lastError = `Judge model request failed (${result.status}): ${result.bodyText.slice(0, 400)}`;
+      continue;
+    }
+
+    const payload = result.json ?? {};
+    const raw =
+      extractTextFromUnknown(payload.output_text) ||
+      extractTextFromUnknown(payload.reply) ||
+      extractTextFromUnknown(payload.text) ||
+      extractTextFromUnknown(payload.choices?.[0]) ||
+      extractTextFromUnknown(payload.output?.[0]) ||
+      extractTextFromUnknown(payload);
+
+    if (!raw) {
+      lastError = "Judge model returned an empty response.";
+      continue;
+    }
+
+    if (raw.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(raw) as Partial<AgentEvaluation>;
+        if (
+          typeof parsed.score === "number" &&
+          typeof parsed.confidence === "number" &&
+          typeof parsed.rationale === "string"
+        ) {
+          return {
+            score: Number(clamp(parsed.score, 1, 10).toFixed(2)),
+            confidence: Number(clamp(parsed.confidence, 0, 1).toFixed(2)),
+            rationale: parsed.rationale.trim(),
+            evidence: Array.isArray(parsed.evidence)
+              ? parsed.evidence.map(String).filter(Boolean).slice(0, 6)
+              : [],
+            flags: Array.isArray(parsed.flags) ? parsed.flags.map(String).filter(Boolean).slice(0, 6) : [],
+          };
+        }
+      } catch {
+        // Fall through to line-based validation.
+      }
+    }
+
+    return validateEvaluation(raw);
   }
 
-  const payload = (await response.json()) as {
-    output_text?: string;
-    choices?: Array<{
-      message?: {
-        content?: string | Array<{ text?: string; type?: string }>;
-      };
-    }>;
-    reply?: string;
-  };
-
-  const rawContent = payload.output_text ?? payload.reply ?? payload.choices?.[0]?.message?.content;
-  const raw =
-    typeof rawContent === "string"
-      ? rawContent.trim()
-      : Array.isArray(rawContent)
-        ? rawContent
-            .map((item) => (typeof item?.text === "string" ? item.text : ""))
-            .join("\n")
-            .trim()
-        : "";
-  if (!raw) {
-    throw new Error("Judge model returned an empty response.");
-  }
-
-  return validateEvaluation(raw);
+  throw new Error(lastError);
 }
