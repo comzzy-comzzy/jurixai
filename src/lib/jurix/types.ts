@@ -52,6 +52,7 @@ export interface SubmissionScore {
   criterion_id: string;
   agent_id: string;
   score: number;
+  weighted_points?: number;
   confidence: number | null;
   rationale: string | null;
   evidence: string[] | null;

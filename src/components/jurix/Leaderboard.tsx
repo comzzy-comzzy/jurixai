@@ -46,11 +46,10 @@ export function Leaderboard({
                 <WalletAddress address={p.payout_address} />
               </td>
               <td className="py-4 px-5 font-bold tabular-nums">
-                {(p.weighted_score / 10).toFixed(2)}
-                <span className="text-xs text-muted-foreground font-normal"> / 10.00</span>
+                {p.weighted_score.toFixed(1)}%
               </td>
               <td className="py-4 px-5 w-48 hidden sm:table-cell">
-                <ScoreBar score={p.weighted_score / 10} delay={i * 80} showLabel={false} />
+                <ScoreBar score={p.weighted_score} max={100} delay={i * 80} showLabel={false} />
               </td>
             </tr>
           ))}

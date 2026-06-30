@@ -147,12 +147,17 @@ function normalizeSubmission(row: Record<string, unknown>, weightedScore = 0): S
 }
 
 function normalizeScore(row: Record<string, unknown>): SubmissionScore {
+  const score = toNumber(row.score);
+  const criterionWeight = toNumber(
+    (row.criterion as { weight_percent?: unknown } | null)?.weight_percent ?? 0,
+  );
   return {
     id: String(row.id),
     registration_id: String(row.registration_id),
     criterion_id: String(row.criterion_id),
     agent_id: String(row.agent_id),
-    score: toNumber(row.score),
+    score,
+    weighted_points: (score / 10) * criterionWeight,
     confidence: row.confidence == null ? null : toNumber(row.confidence),
     rationale: row.rationale ? String(row.rationale) : null,
     evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : null,
@@ -395,7 +400,7 @@ export async function getSubmissionDetail(
         .maybeSingle(),
       supabase
         .from("submission_scores")
-        .select("*")
+        .select("*, criterion:judging_criteria(weight_percent)")
         .eq("registration_id", submissionId)
         .order("created_at", { ascending: true }),
     ]);

@@ -209,7 +209,7 @@ function HackathonDetail() {
                     <p className="text-sm text-muted-foreground">by {submission.team_name}</p>
                   </div>
                   <span className="text-2xl font-bold text-accent tabular-nums">
-                    {(submission.weighted_score / 10).toFixed(2)}
+                    {submission.weighted_score.toFixed(1)}%
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-2 mb-3">

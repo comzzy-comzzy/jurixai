@@ -32,6 +32,12 @@ function ProjectDetail() {
   const project = Route.useLoaderData();
   const [voted, setVoted] = useState(false);
   const agentNameById = new Map(project.agents.map((agent) => [agent.id, agent.name]));
+  const agentById = new Map(project.agents.map((agent) => [agent.id, agent]));
+  const scoreByCriterionId = new Map(project.scores.map((score) => [score.criterion_id, score]));
+  const totalRawScore =
+    project.scores.length > 0
+      ? project.scores.reduce((sum, score) => sum + score.score, 0) / project.scores.length
+      : 0;
 
   const activity = useMemo(
     () =>
@@ -111,21 +117,19 @@ function ProjectDetail() {
           </div>
         </div>
         <div className="lg:col-span-4 rounded-xl border border-accent/30 bg-accent/5 p-6 flex flex-col items-center text-center">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Weighted score</p>
+          <p className="text-xs font-medium text-muted-foreground mb-2">Final weighted total</p>
           <p className="text-6xl md:text-7xl font-extrabold text-accent tabular-nums">
-            {(project.weighted_score / 10).toFixed(2)}
+            {project.weighted_score.toFixed(1)}%
           </p>
-          <p className="text-xs text-muted-foreground mt-1 mb-6">/ 10.00</p>
+          <p className="text-xs text-muted-foreground mt-1 mb-6">Weighted across all judge criteria</p>
           <div className="w-full grid grid-cols-2 gap-4 mb-6 text-sm">
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Agent evaluations</p>
-              <p className="text-lg font-bold tabular-nums">{project.scores.length}</p>
+              <p className="text-xs font-medium text-muted-foreground">Average raw score</p>
+              <p className="text-lg font-bold tabular-nums">{totalRawScore.toFixed(2)} / 10</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Votes</p>
-              <p className="text-lg font-bold tabular-nums">
-                {project.community_votes + (voted ? 1 : 0)}
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">Judge evaluations</p>
+              <p className="text-lg font-bold tabular-nums">{project.scores.length}</p>
             </div>
           </div>
           <button
@@ -145,7 +149,7 @@ function ProjectDetail() {
 
       <section className="mb-12">
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-sm font-semibold text-foreground">AI scoring breakdown</h2>
+          <h2 className="text-sm font-semibold text-foreground">Per-agent scoring breakdown</h2>
           <div className="h-px flex-1 bg-border" />
         </div>
         {project.criteria.length === 0 ? (
@@ -160,25 +164,29 @@ function ProjectDetail() {
                   <th className="p-4 font-medium">Criterion</th>
                   <th className="p-4 font-medium">Agent</th>
                   <th className="p-4 font-medium w-24">Weight</th>
-                  <th className="p-4 font-medium w-48">Score</th>
-                  <th className="p-4 font-medium hidden md:table-cell">Rationale</th>
+                  <th className="p-4 font-medium w-48">Raw score</th>
+                  <th className="p-4 font-medium w-32">Weighted</th>
+                  <th className="p-4 font-medium hidden md:table-cell">Why</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {project.criteria.map((criterion, i) => {
-                  const score = project.scores.find((item) => item.criterion_id === criterion.id);
-                  const agentName = criterion.agent_id
-                    ? agentNameById.get(criterion.agent_id)
-                    : null;
+                  const score = scoreByCriterionId.get(criterion.id);
+                  const agent = criterion.agent_id ? agentById.get(criterion.agent_id) : null;
                   return (
                     <tr key={criterion.id} className="align-top">
                       <td className="p-4 font-semibold text-foreground">{criterion.name}</td>
-                      <td className="p-4 font-medium text-ai">{agentName ?? "Unassigned"}</td>
+                      <td className="p-4 font-medium text-ai">
+                        {agent ? `${agent.name} (${agent.short_code})` : "Unassigned"}
+                      </td>
                       <td className="p-4 tabular-nums text-accent font-medium">
                         {criterion.weight_percent}%
                       </td>
                       <td className="p-4">
                         <ScoreBar score={score?.score ?? 0} delay={i * 60} />
+                      </td>
+                      <td className="p-4 tabular-nums font-semibold text-foreground">
+                        {score ? `${(score.weighted_points ?? 0).toFixed(1)}%` : "0.0%"}
                       </td>
                       <td className="p-4 text-muted-foreground leading-relaxed text-xs hidden md:table-cell max-w-md">
                         {score?.rationale ?? "No rationale recorded yet."}
