@@ -69,7 +69,7 @@ function HackathonDetail() {
         )}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <p className="text-xs font-medium text-muted-foreground mb-2">Prize pool</p>
           <p className="text-2xl font-bold tabular-nums">
@@ -94,17 +94,6 @@ function HackathonDetail() {
           <p className="text-xs text-muted-foreground mt-3">
             Start: {hackathon.start_date ? relativeDate(hackathon.start_date) : "TBD"}
           </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Winner split</p>
-          <div className="flex gap-5">
-            {hackathon.winner_split.map((s, i) => (
-              <div key={i}>
-                <p className="text-2xl font-bold tabular-nums text-accent">{s}%</p>
-                <p className="text-xs text-muted-foreground">#{i + 1}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -217,9 +206,8 @@ function HackathonDetail() {
                 <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
                   {submission.description ?? "No submission description yet."}
                 </p>
-                <div className="flex justify-between items-center text-xs text-muted-foreground border-t border-border pt-3">
-                  <span>Rank #{i + 1}</span>
-                  <span>{submission.community_votes} votes</span>
+                <div className="text-xs text-muted-foreground border-t border-border pt-3">
+                  Rank #{i + 1}
                 </div>
               </Link>
             ))}
