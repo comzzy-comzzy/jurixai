@@ -19,9 +19,16 @@ export function hasSupabaseServerConfig(): boolean {
 export function getSupabaseServerClient(): SupabaseClient {
   if (cached) return cached;
 
-  cached = createClient(required("VITE_SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"), {
+  const url = required("VITE_SUPABASE_URL");
+  const key = required("SUPABASE_SERVICE_ROLE_KEY");
+  const client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  if (!client || typeof client.from !== "function") {
+    throw new Error("Supabase server client failed to initialize correctly.");
+  }
+
+  cached = client;
 
   return cached;
 }

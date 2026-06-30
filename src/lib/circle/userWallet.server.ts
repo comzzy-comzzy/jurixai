@@ -24,6 +24,7 @@ function client() {
 /** Report whether the server has the minimum config required for email login. */
 export const emailLoginStatus = createServerFn({ method: "GET" }).handler(async () => ({
   configured: Boolean(process.env.CIRCLE_API_KEY?.trim()),
+  apiKeyConfigured: Boolean(process.env.CIRCLE_API_KEY?.trim()),
   chain: CHAIN,
 }));
 

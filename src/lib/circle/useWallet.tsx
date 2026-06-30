@@ -1,16 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { createWallet, loginWallet, type CircleWallet } from "./wallet";
 import { emailSignIn } from "./userWallet";
-
-const STORAGE_KEY = "jurixai.wallet";
+import {
+  saveAccountProfile as saveAccountProfileServer,
+} from "@/lib/account/profile.server";
+import type { AccountProfile, SaveAccountProfileInput } from "@/lib/account/types";
+import {
+  clearWalletSession,
+  getWalletSession,
+  persistWalletSession,
+} from "@/lib/account/session.server";
 
 interface WalletContextValue {
   wallet: CircleWallet | null;
+  profile: AccountProfile | null;
   busy: boolean;
   error: string | null;
+  profileBusy: boolean;
   signUp: (username: string) => Promise<void>;
   logIn: (username: string) => Promise<void>;
   loginEmail: (email: string) => Promise<void>;
+  saveProfile: (input: SaveAccountProfileInput) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   signOut: () => void;
 }
 
@@ -18,35 +29,63 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<CircleWallet | null>(null);
+  const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
 
-  // Restore a previously connected wallet (client only).
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const session = await getWalletSession();
+        if (cancelled) return;
+        setWallet(session.wallet);
+        setProfile(session.profile);
+      } catch {
+        if (cancelled) return;
+        setWallet(null);
+        setProfile(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    setProfileBusy(true);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setWallet(JSON.parse(raw) as CircleWallet);
-    } catch {
-      /* ignore malformed storage */
+      const session = await getWalletSession();
+      setWallet(session.wallet);
+      setProfile(session.profile);
+    } finally {
+      setProfileBusy(false);
     }
   }, []);
 
-  const persist = useCallback((w: CircleWallet | null) => {
-    setWallet(w);
-    try {
-      if (w) localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
-      else localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore storage failures */
-    }
-  }, []);
+  useEffect(() => {
+    void refreshProfile();
+  }, [refreshProfile]);
 
   const run = useCallback(
     async (fn: () => Promise<CircleWallet>) => {
       setBusy(true);
       setError(null);
       try {
-        persist(await fn());
+        const nextWallet = await fn();
+        const session = await persistWalletSession({
+          data: {
+            identifier: nextWallet.identifier,
+            authMethod: nextWallet.authMethod,
+            address: nextWallet.address,
+            chain: nextWallet.chain,
+          },
+        });
+        setWallet(session.wallet);
+        setProfile(session.profile);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Wallet action failed");
         throw e;
@@ -54,7 +93,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
     },
-    [persist],
+    [],
   );
 
   const signUp = useCallback((username: string) => run(() => createWallet(username)), [run]);
@@ -62,15 +101,58 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const loginEmail = useCallback(
     (email: string) =>
       run(async () => {
-        const w = await emailSignIn(email);
-        return { username: w.email, address: w.address, chain: w.chain };
+        return emailSignIn(email);
       }),
     [run],
   );
-  const signOut = useCallback(() => persist(null), [persist]);
+  const saveProfile = useCallback(
+    async (input: SaveAccountProfileInput) => {
+      if (!wallet) throw new Error("Sign in first.");
+      setProfileBusy(true);
+      setError(null);
+      try {
+        const next = await saveAccountProfileServer({
+          data: {
+            identifier: wallet.identifier,
+            authMethod: wallet.authMethod,
+            walletAddress: wallet.address,
+            walletChain: wallet.chain,
+            ...input,
+          },
+        });
+        setProfile(next);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Profile update failed");
+        throw e;
+      } finally {
+        setProfileBusy(false);
+      }
+    },
+    [wallet],
+  );
+  const signOut = useCallback(() => {
+    void clearWalletSession();
+    setWallet(null);
+    setProfile(null);
+    setError(null);
+  }, []);
 
   return (
-    <WalletContext.Provider value={{ wallet, busy, error, signUp, logIn, loginEmail, signOut }}>
+    <WalletContext.Provider
+      value={{
+        wallet,
+        profile,
+        busy,
+        error,
+        profileBusy,
+        signUp,
+        logIn,
+        loginEmail,
+        saveProfile,
+        refreshProfile,
+        signOut,
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );

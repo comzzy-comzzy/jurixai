@@ -1,20 +1,23 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, Copy, Fingerprint, LogOut, Mail } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWallet } from "@/lib/circle/useWallet";
 import { emailLoginStatus } from "@/lib/circle/userWallet.server";
 import { isEmailLoginConfigured, userWalletChain } from "@/lib/circle/userWallet";
+import { isWalletConfigured, walletChain } from "@/lib/circle/wallet";
 import { truncateAddr } from "@/lib/format";
 import logoUrl from "@/assets/jurixai-logo.png";
 
-type Step = "choose" | "email";
+type Step = "choose" | "email" | "passkey";
 
 export function AccountButton() {
-  const { wallet, busy, error, loginEmail, signOut } = useWallet();
+  const { wallet, busy, error, loginEmail, signOut, signUp, logIn } = useWallet();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("choose");
   const [email, setEmail] = useState("");
+  const [handle, setHandle] = useState("");
   const [serverReady, setServerReady] = useState<boolean | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -49,12 +52,18 @@ export function AccountButton() {
   if (wallet) {
     return (
       <div className="flex items-center gap-2">
+        <Link
+          to="/profile"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-input hover:text-foreground"
+        >
+          Dashboard
+        </Link>
         <button
           onClick={() => {
             navigator.clipboard?.writeText(wallet.address);
             toast.success("Wallet address copied", { description: wallet.address });
           }}
-          title={`${wallet.username} · ${wallet.chain}`}
+          title={`${wallet.identifier} · ${wallet.chain}`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 font-mono text-xs text-muted-foreground hover:text-foreground hover:border-input transition-colors"
         >
           {truncateAddr(wallet.address)}
@@ -75,10 +84,26 @@ export function AccountButton() {
   const setupMessage = !isEmailLoginConfigured()
     ? "Wallet login is not configured in this environment yet (VITE_CIRCLE_APP_ID missing)."
     : serverError;
+  const passkeySetupMessage = !isWalletConfigured()
+    ? "Passkey wallet setup is missing VITE_CIRCLE_CLIENT_KEY and VITE_CIRCLE_CLIENT_URL."
+    : null;
+  const title =
+    step === "choose"
+      ? "Log in to JuriXAI"
+      : step === "email"
+        ? "Continue with email"
+        : "Continue with passkey";
+  const subtitle =
+    step === "choose"
+      ? "Create your account, get a personal wallet, and unlock your profile dashboard."
+      : step === "email"
+        ? "We'll email you a one-time code, create your wallet, and open your profile dashboard."
+        : "Use a passkey on this device to create your wallet and account.";
 
   function reset() {
     setStep("choose");
     setEmail("");
+    setHandle("");
     setServerError(null);
     setServerReady(null);
   }
@@ -99,18 +124,15 @@ export function AccountButton() {
         <DialogContent className="max-w-sm rounded-2xl p-6">
           <div className="flex flex-col items-center text-center">
             <img src={logoUrl} alt="JuriXAI" className="size-10 object-contain mb-3" />
-            <DialogTitle className="text-xl font-bold tracking-tight">
-              {step === "choose" ? "Log in to JuriXAI" : "Continue with email"}
-            </DialogTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              {step === "choose"
-                ? "Create a wallet to enter hackathons and get paid in USDC."
-                : "We'll email you a one-time code to create your wallet."}
-            </p>
+            <DialogTitle className="text-xl font-bold tracking-tight">{title}</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
           </div>
 
-          {setupMessage && (
+          {step === "email" && setupMessage && (
             <p className="mt-4 rounded-lg bg-warn/10 text-warn text-xs p-3">{setupMessage}</p>
+          )}
+          {step === "passkey" && passkeySetupMessage && (
+            <p className="mt-4 rounded-lg bg-warn/10 text-warn text-xs p-3">{passkeySetupMessage}</p>
           )}
 
           {/* Step: choose method */}
@@ -126,18 +148,14 @@ export function AccountButton() {
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-semibold">Email</span>
                   <span className="block text-xs text-muted-foreground">
-                    One-time code to your inbox. Gasless, no seed phrase.
+                    One-time code to your inbox. Profile + wallet created on first login.
                   </span>
                 </span>
                 <ChevronRight className="size-4 text-muted-foreground shrink-0" />
               </button>
 
               <button
-                onClick={() =>
-                  toast("Passkey sign-in is coming soon", {
-                    description: "Use Email for now — it's instant and gasless.",
-                  })
-                }
+                onClick={() => setStep("passkey")}
                 className="w-full flex items-center gap-3 rounded-xl border border-border p-3.5 text-left hover:border-input hover:bg-muted/50 transition-colors"
               >
                 <span className="size-10 shrink-0 rounded-lg bg-accent/10 grid place-items-center text-accent">
@@ -146,7 +164,7 @@ export function AccountButton() {
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-semibold">Passkey</span>
                   <span className="block text-xs text-muted-foreground">
-                    Face ID or fingerprint on this device. Gasless.
+                    Face ID or fingerprint on this device. Separate Circle passkey setup required.
                   </span>
                 </span>
                 <ChevronRight className="size-4 text-muted-foreground shrink-0" />
@@ -196,8 +214,61 @@ export function AccountButton() {
             </div>
           )}
 
+          {step === "passkey" && (
+            <div className="mt-5 space-y-3">
+              <input
+                type="text"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value)}
+                placeholder="choose-a-handle"
+                autoFocus
+                className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+              />
+              {error && <p className="text-warn text-xs">{error}</p>}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  disabled={busy || !handle.trim() || !isWalletConfigured()}
+                  onClick={async () => {
+                    try {
+                      await signUp(handle.trim());
+                      setOpen(false);
+                      toast.success("Passkey wallet created");
+                    } catch {
+                      /* error shown inline */
+                    }
+                  }}
+                  className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  {busy ? "Working…" : "Create"}
+                </button>
+                <button
+                  disabled={busy || !handle.trim() || !isWalletConfigured()}
+                  onClick={async () => {
+                    try {
+                      await logIn(handle.trim());
+                      setOpen(false);
+                      toast.success("Passkey wallet connected");
+                    } catch {
+                      /* error shown inline */
+                    }
+                  }}
+                  className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                >
+                  {busy ? "Working…" : "Sign in"}
+                </button>
+              </div>
+              <button
+                onClick={() => setStep("choose")}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="size-3" /> Back
+              </button>
+            </div>
+          )}
+
           <p className="mt-5 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-            Gasless on {userWalletChain()} · Secured by Circle
+            {step === "passkey" ? `Passkey on ${walletChain()}` : `Gasless on ${userWalletChain()}`} ·
+            {" "}Secured by Circle
           </p>
         </DialogContent>
       </Dialog>

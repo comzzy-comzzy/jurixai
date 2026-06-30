@@ -6,15 +6,10 @@
  * called, so we only collect the email here.
  */
 import { emailLoginStart, provisionWallet, listUserWallets } from "./userWallet.server";
+import type { CircleWallet } from "./wallet";
 
 const APP_ID = import.meta.env.VITE_CIRCLE_APP_ID as string | undefined;
 const CHAIN = (import.meta.env.VITE_CIRCLE_CHAIN as string | undefined) || "MATIC-AMOY";
-
-export interface UserWallet {
-  email: string;
-  address: string;
-  chain: string;
-}
 
 export function isEmailLoginConfigured(): boolean {
   return Boolean(APP_ID);
@@ -99,12 +94,16 @@ async function ensureWallet(session: Session): Promise<string> {
   }
 
   const list = await listUserWallets({ data: { userToken: session.userToken } });
-  return list.address ?? prov.address ?? "";
+  const address = list.address ?? prov.address ?? "";
+  if (!address) {
+    throw new Error("Circle login succeeded but no wallet address was returned.");
+  }
+  return address;
 }
 
 /** Full email sign-in: OTP → wallet. Returns the user's wallet. */
-export async function emailSignIn(email: string): Promise<UserWallet> {
+export async function emailSignIn(email: string): Promise<CircleWallet> {
   const session = await loginWithEmail(email);
   const address = await ensureWallet(session);
-  return { email, address, chain: CHAIN };
+  return { identifier: email, address, chain: CHAIN, authMethod: "email" };
 }
