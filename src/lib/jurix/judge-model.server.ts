@@ -20,6 +20,11 @@ type JudgeModelConfig = {
   baseUrl: string;
 };
 
+type RepoContext = {
+  summary: string;
+  evidence: string[];
+};
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -34,6 +39,116 @@ function clamp(value: number, min: number, max: number): number {
 
 function optional(value: string | null | undefined): string {
   return value?.trim() ? value.trim() : "Not provided";
+}
+
+function truncate(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max)}...`;
+}
+
+function parseGitHubRepo(url: string | null): { owner: string; repo: string } | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (!/(^|\.)github\.com$/i.test(parsed.hostname)) return null;
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length < 2) return null;
+    return {
+      owner: segments[0],
+      repo: segments[1].replace(/\.git$/i, ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchJson<T>(url: string): Promise<T | null> {
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/vnd.github+json",
+      "user-agent": "jurixai-judge-bot",
+    },
+  });
+
+  if (!response.ok) return null;
+  return (await response.json()) as T;
+}
+
+async function fetchText(url: string): Promise<string | null> {
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/vnd.github.raw+json",
+      "user-agent": "jurixai-judge-bot",
+    },
+  });
+
+  if (!response.ok) return null;
+  return await response.text();
+}
+
+async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | null> {
+  const repoRef = parseGitHubRepo(githubUrl);
+  if (!repoRef) return null;
+
+  const repoMeta = await fetchJson<{
+    full_name?: string;
+    default_branch?: string;
+    stargazers_count?: number;
+    open_issues_count?: number;
+    description?: string | null;
+    language?: string | null;
+  }>(`https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`);
+
+  const rootEntries = await fetchJson<Array<{ name?: string; type?: string }>>(
+    `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}/contents`,
+  );
+
+  const readme = await fetchText(
+    `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${repoMeta?.default_branch ?? "main"}/README.md`,
+  );
+
+  const packageJson = await fetchText(
+    `https://raw.githubusercontent.com/${repoRef.owner}/${repoRef.repo}/${repoMeta?.default_branch ?? "main"}/package.json`,
+  );
+
+  const evidence: string[] = [];
+  if (repoMeta?.full_name) evidence.push(`Repository: ${repoMeta.full_name}`);
+  if (repoMeta?.language) evidence.push(`Primary language: ${repoMeta.language}`);
+  if (rootEntries?.length) {
+    evidence.push(
+      `Root entries: ${rootEntries
+        .slice(0, 8)
+        .map((entry) => `${entry.name ?? "unknown"} (${entry.type ?? "unknown"})`)
+        .join(", ")}`,
+    );
+  }
+  if (readme?.trim()) {
+    evidence.push(`README present (${readme.trim().split(/\r?\n/).length} lines)`);
+  } else {
+    evidence.push("README missing or unreadable");
+  }
+  if (packageJson?.trim()) {
+    evidence.push("package.json present");
+  }
+
+  const summaryLines = [
+    repoMeta?.description ? `Repo description: ${repoMeta.description}` : null,
+    repoMeta?.language ? `Primary language: ${repoMeta.language}` : null,
+    rootEntries?.length
+      ? `Root files: ${rootEntries
+          .slice(0, 12)
+          .map((entry) => entry.name ?? "unknown")
+          .join(", ")}`
+      : "Root files unavailable.",
+    readme?.trim() ? `README excerpt: ${truncate(readme.trim().replace(/\s+/g, " "), 1800)}` : null,
+    packageJson?.trim()
+      ? `package.json excerpt: ${truncate(packageJson.trim().replace(/\s+/g, " "), 1200)}`
+      : null,
+  ].filter(Boolean);
+
+  return {
+    summary: summaryLines.join("\n"),
+    evidence: evidence.slice(0, 5),
+  };
 }
 
 export function hasJudgeModelConfig(): boolean {
@@ -84,7 +199,11 @@ function buildSystemPrompt(agent: JudgeAgent, criterion: JudgingCriterion): stri
   ].join("\n");
 }
 
-function buildUserPrompt(hackathon: HackathonSummary, submission: SubmissionSummary): string {
+function buildUserPrompt(
+  hackathon: HackathonSummary,
+  submission: SubmissionSummary,
+  repoContext: RepoContext | null,
+): string {
   return [
     "Evaluate this submission against the assigned criterion.",
     "",
@@ -107,6 +226,8 @@ function buildUserPrompt(hackathon: HackathonSummary, submission: SubmissionSumm
     `Entry paid: ${submission.entry_paid ? "yes" : "no"}`,
     `Community votes: ${submission.community_votes}`,
     `Submission status: ${submission.status}`,
+    `Public repo inspection: ${repoContext ? "available" : "not available"}`,
+    repoContext ? repoContext.summary : "Repo inspection summary: Not available.",
     "",
     "Return exactly these 5 lines:",
     "SCORE: <number 1-10>",
@@ -119,8 +240,8 @@ function buildUserPrompt(hackathon: HackathonSummary, submission: SubmissionSumm
     '- "score" must be between 1 and 10.',
     '- "confidence" must be between 0 and 1.',
     '- "rationale" must be specific to this project, criterion, and host brief, and 320 characters or fewer.',
-    '- "evidence" must contain at most 3 short observations from the provided hackathon and submission fields only.',
-    '- "flags" should contain short machine-readable labels such as missing_repo, missing_demo, off_brief, missing_deliverable, weak_docs, low_evidence, entry_unpaid.',
+    '- "evidence" must contain at most 3 short observations from the provided hackathon, submission fields, and repo inspection only.',
+    '- "flags" should contain short machine-readable labels such as missing_repo, missing_demo, off_brief, missing_deliverable, weak_docs, weak_repo_structure, weak_readme, low_evidence, entry_unpaid.',
     '- If there are no flags, write "FLAGS: none".',
   ].join("\n");
 }
@@ -179,6 +300,7 @@ export async function evaluateSubmissionWithModel(
   hackathon: HackathonSummary,
   submission: SubmissionSummary,
 ): Promise<AgentEvaluation> {
+  const repoContext = await loadRepoContext(submission.github_url);
   const config = getJudgeModelConfig();
   const body =
     config.provider === "minimax" || config.provider === "openai_compat"
@@ -186,7 +308,7 @@ export async function evaluateSubmissionWithModel(
           model: config.model,
           messages: [
             { role: "system", content: buildSystemPrompt(agent, criterion) },
-            { role: "user", content: buildUserPrompt(hackathon, submission) },
+            { role: "user", content: buildUserPrompt(hackathon, submission, repoContext) },
           ],
           temperature: 0.2,
           max_tokens: 420,
@@ -200,7 +322,12 @@ export async function evaluateSubmissionWithModel(
             },
             {
               role: "user",
-              content: [{ type: "input_text", text: buildUserPrompt(hackathon, submission) }],
+              content: [
+                {
+                  type: "input_text",
+                  text: buildUserPrompt(hackathon, submission, repoContext),
+                },
+              ],
             },
           ],
           text: {
