@@ -1,10 +1,10 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { loadSubmissionDetail } from "@/lib/jurix/actions.server";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { ScoreBar } from "@/components/jurix/ScoreBar";
 import { JudgeActivityFeed } from "@/components/jurix/JudgeActivityFeed";
-import { ArrowUpRight, ThumbsUp } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
 export const Route = createFileRoute("/hackathons/$id/project/$projectId")({
   loader: async ({ params }) => {
@@ -34,7 +34,6 @@ export const Route = createFileRoute("/hackathons/$id/project/$projectId")({
 
 function ProjectDetail() {
   const project = Route.useLoaderData();
-  const [voted, setVoted] = useState(false);
   const agentNameById = new Map(project.agents.map((agent) => [agent.id, agent.name]));
   const agentById = new Map(project.agents.map((agent) => [agent.id, agent]));
   const scoreByCriterionId = new Map(project.scores.map((score) => [score.criterion_id, score]));
@@ -135,12 +134,14 @@ function ProjectDetail() {
             <WalletAddress address={project.payout_address} />
           </div>
         </div>
-        <div className="lg:col-span-4 rounded-xl border border-accent/30 bg-accent/5 p-6 flex flex-col items-center text-center">
+        <div className="lg:col-span-4 rounded-xl border border-accent/30 bg-accent/5 p-6 flex flex-col text-center">
           <p className="text-xs font-medium text-muted-foreground mb-2">Final weighted total</p>
           <p className="text-6xl md:text-7xl font-extrabold text-accent tabular-nums">
             {project.weighted_score.toFixed(1)}%
           </p>
-          <p className="text-xs text-muted-foreground mt-1 mb-6">Weighted across all judge criteria</p>
+          <p className="text-xs text-muted-foreground mt-1 mb-6">
+            Weighted across all judge criteria
+          </p>
           <div className="w-full grid grid-cols-2 gap-4 mb-6 text-sm">
             <div>
               <p className="text-xs font-medium text-muted-foreground">Average raw score</p>
@@ -151,25 +152,132 @@ function ProjectDetail() {
               <p className="text-lg font-bold tabular-nums">{project.scores.length}</p>
             </div>
           </div>
-          <button
-            onClick={() => setVoted(true)}
-            disabled={voted}
-            className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
-              voted
-                ? "border border-border text-muted-foreground cursor-not-allowed"
-                : "bg-accent text-accent-foreground shadow-sm hover:opacity-90"
-            }`}
-          >
-            <ThumbsUp className="size-4" />
-            {voted ? "Vote cast" : "Community vote"}
-          </button>
+          <div className="rounded-lg border border-border bg-background/70 px-4 py-3 text-left">
+            <p className="text-xs font-medium text-muted-foreground">Public verdict summary</p>
+            <p className="mt-2 text-sm leading-relaxed text-foreground">
+              This page shows the submission links, written project summary, and the exact AI
+              judge notes that produced this final score.
+            </p>
+          </div>
         </div>
       </header>
 
       <section className="mb-12">
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-sm font-semibold text-foreground">Submitted project details</h2>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">What RelayCart submitted</p>
+              <p className="text-sm leading-relaxed text-foreground">
+                {project.description ?? "No project description was submitted."}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Submission record</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Project name</span>
+                  <span className="text-right font-medium text-foreground">
+                    {project.project_name}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Team</span>
+                  <span className="text-right font-medium text-foreground">{project.team_name}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className="text-right font-medium text-foreground capitalize">
+                    {project.status}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Entry fee status</span>
+                  <span className="text-right font-medium text-foreground">
+                    {project.entry_paid ? "Paid" : "Unpaid"}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Submitted at</span>
+                  <span className="text-right font-medium text-foreground">
+                    {new Date(project.created_at).toLocaleString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">GitHub repo</p>
+              {project.github_url ? (
+                <a
+                  href={project.github_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-accent break-all"
+                >
+                  {project.github_url}
+                  <ArrowUpRight className="size-3.5 shrink-0" />
+                </a>
+              ) : (
+                <p className="text-sm text-muted-foreground">No GitHub link submitted.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Live demo</p>
+              {project.demo_url ? (
+                <a
+                  href={project.demo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-accent break-all"
+                >
+                  {project.demo_url}
+                  <ArrowUpRight className="size-3.5 shrink-0" />
+                </a>
+              ) : (
+                <p className="text-sm text-muted-foreground">No demo link submitted.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-border bg-background px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Video demo</p>
+              {project.video_url ? (
+                <a
+                  href={project.video_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-accent break-all"
+                >
+                  {project.video_url}
+                  <ArrowUpRight className="size-3.5 shrink-0" />
+                </a>
+              ) : (
+                <p className="text-sm text-muted-foreground">No video link submitted.</p>
+              )}
+            </div>
+          </div>
+          <div className="mt-6 rounded-lg border border-border bg-background px-4 py-3">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Payout wallet</p>
+            <WalletAddress address={project.payout_address} />
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-12">
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-sm font-semibold text-foreground">How this became {project.weighted_score.toFixed(1)}%</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              How this became {project.weighted_score.toFixed(1)}%
+            </h2>
             <div className="h-px flex-1 bg-border" />
           </div>
           <div className="space-y-3 text-sm text-muted-foreground">
@@ -190,6 +298,9 @@ function ProjectDetail() {
                     <span className="font-semibold text-foreground tabular-nums">
                       {weighted.toFixed(1)}%
                     </span>
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed">
+                    {score?.rationale ?? "No rationale recorded yet."}
                   </p>
                 </div>
               );
@@ -262,7 +373,7 @@ function ProjectDetail() {
 
       <section className="mb-12">
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Judge evidence and flags</h2>
+          <h2 className="text-sm font-semibold text-foreground">What each agent reviewed</h2>
           <div className="h-px flex-1 bg-border" />
         </div>
         <div className="grid grid-cols-1 gap-4">
@@ -286,7 +397,9 @@ function ProjectDetail() {
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Evidence used</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Evidence cited from the submission
+                  </p>
                   {score?.evidence && score.evidence.length > 0 ? (
                     <ul className="space-y-2 text-sm text-muted-foreground">
                       {score.evidence.map((item, index) => (
@@ -300,7 +413,9 @@ function ProjectDetail() {
                   )}
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Flags</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Flags raised during review
+                  </p>
                   {score?.flags && score.flags.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {score.flags.map((flag, index) => (
@@ -324,7 +439,7 @@ function ProjectDetail() {
 
       <section>
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Judge activity</h2>
+          <h2 className="text-sm font-semibold text-foreground">Judge activity log</h2>
           <div className="h-px flex-1 bg-border" />
         </div>
         <JudgeActivityFeed
