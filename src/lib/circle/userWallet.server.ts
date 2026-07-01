@@ -11,7 +11,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
 
-const CHAIN = process.env.CIRCLE_CHAIN || "MATIC-AMOY";
+const CHAIN = process.env.CIRCLE_CHAIN || "ARC-TESTNET";
 
 function client() {
   const apiKey = process.env.CIRCLE_API_KEY;
@@ -55,7 +55,10 @@ export const provisionWallet = createServerFn({ method: "POST" })
     if (wallets.length > 0) {
       return { challengeId: null as string | null, address: wallets[0].address ?? null };
     }
-    const created = await c.createWallet({
+    // First-time user: no PIN and no wallet yet. createUserPinWithWallets sets a
+    // PIN and creates the wallet(s) in one challenge (createWallet alone assumes a
+    // PIN already exists, which is why the old flow hung on first login).
+    const created = await c.createUserPinWithWallets({
       userToken: data.userToken,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       blockchains: [CHAIN as any],
