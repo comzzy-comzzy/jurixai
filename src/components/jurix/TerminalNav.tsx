@@ -43,6 +43,13 @@ export function TerminalNav() {
             Host
           </Link>
           <Link
+            to="/profile"
+            className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            activeProps={{ className: "hidden sm:inline text-sm font-semibold text-foreground" }}
+          >
+            Dashboard
+          </Link>
+          <Link
             to="/admin"
             className="hidden md:inline text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
