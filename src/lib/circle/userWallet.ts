@@ -25,11 +25,32 @@ interface Session {
 }
 
 /**
+ * Circle's SDK deps (jsonwebtoken/uuid) expect Node globals in the browser. The
+ * client build aliases the `buffer`/`process` modules, but some transitive code
+ * reads the bare `Buffer`/`process`/`global` globals — populate them before the
+ * SDK loads. No-op on the server.
+ */
+async function ensureBrowserGlobals(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (!g.global) g.global = globalThis;
+  if (!g.Buffer) {
+    const { Buffer } = await import("buffer");
+    g.Buffer = Buffer;
+  }
+  if (!g.process) {
+    const proc = (await import("process/browser")) as { default?: unknown };
+    g.process = proc.default ?? proc;
+  }
+}
+
+/**
  * Start email login: sends the OTP, opens Circle's code-entry UI, and resolves
  * with a session once the user enters the right code.
  */
 async function loginWithEmail(email: string): Promise<Session> {
   if (!APP_ID) throw new Error("Circle App ID is missing (VITE_CIRCLE_APP_ID).");
+  await ensureBrowserGlobals();
   const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
 
   return new Promise<Session>((resolve, reject) => {
@@ -78,6 +99,7 @@ async function ensureWallet(session: Session): Promise<string> {
   const prov = await provisionWallet({ data: { userToken: session.userToken } });
 
   if (prov.challengeId) {
+    await ensureBrowserGlobals();
     const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
     await new Promise<void>((resolve, reject) => {
       const sdk = new W3SSdk({ appSettings: { appId: APP_ID! } });
