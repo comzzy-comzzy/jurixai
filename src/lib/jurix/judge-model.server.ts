@@ -603,6 +603,52 @@ export function hasJudgeModelConfig(): boolean {
   return Boolean(process.env.JURIX_JUDGE_API_KEY?.trim() && process.env.JURIX_JUDGE_MODEL?.trim());
 }
 
+/**
+ * One-shot diagnostic: send a trivial prompt to the configured judge model and
+ * return the raw HTTP status + response body. Surfaces exactly why real judging
+ * falls back (wrong model id, bad auth, wrong endpoint, unexpected shape).
+ */
+export async function probeJudgeModel(): Promise<{
+  configured: boolean;
+  provider?: string;
+  endpoint?: string;
+  model?: string;
+  ok?: boolean;
+  status?: number;
+  body?: string;
+  error?: string;
+}> {
+  if (!hasJudgeModelConfig()) {
+    return { configured: false };
+  }
+  try {
+    const config = getJudgeModelConfig();
+    const base = config.baseUrl.replace(/\/$/, "");
+    const endpoint =
+      config.provider === "openai_compat"
+        ? `${base}/chat/completions`
+        : config.provider === "minimax"
+          ? `${base}/text/chatcompletion_v2`
+          : `${base}/responses`;
+    const res = await requestJudgeModel(endpoint, config.apiKey, {
+      model: config.model,
+      messages: [{ role: "user", content: "Reply with the single word OK." }],
+      max_tokens: 16,
+    });
+    return {
+      configured: true,
+      provider: config.provider,
+      endpoint,
+      model: config.model,
+      ok: res.ok,
+      status: res.status,
+      body: res.bodyText.slice(0, 700),
+    };
+  } catch (e) {
+    return { configured: true, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 function getJudgeModelConfig(): JudgeModelConfig {
   const rawProvider = process.env.JURIX_JUDGE_PROVIDER?.trim().toLowerCase();
   const provider =

@@ -5,6 +5,7 @@ import {
   loadHackathons,
   loadHomeData,
   setHackathonTreasury,
+  testJudgeModel,
   triggerHackathonJudging,
 } from "@/lib/jurix/actions.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
@@ -82,6 +83,7 @@ function Admin() {
           Operator console
         </p>
         <h1 className="text-3xl md:text-4xl font-bold italic tracking-tight">Admin dashboard</h1>
+        <JudgeModelTester />
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
@@ -177,6 +179,74 @@ function Admin() {
           Log out →
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One-click check of the real judge model (0G/GLM). Pings the configured model
+ * once and shows the raw HTTP status + response, so a broken config is obvious
+ * instead of silently falling back to placeholder scores.
+ */
+function JudgeModelTester() {
+  const [busy, setBusy] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [result, setResult] = useState<any>(null);
+
+  return (
+    <div className="mt-5">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setResult(null);
+          try {
+            setResult(await testJudgeModel());
+          } catch (e) {
+            setResult({ error: e instanceof Error ? e.message : String(e) });
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+      >
+        {busy ? "Testing model…" : "Test judge model"}
+      </button>
+      {result && (
+        <div className="mt-3 rounded-lg border border-border bg-muted/40 p-4 text-xs">
+          {result.configured === false ? (
+            <p className="text-warn font-medium">
+              Not configured — JURIX_JUDGE_API_KEY / JURIX_JUDGE_MODEL are missing.
+            </p>
+          ) : (
+            <div className="space-y-1 font-mono">
+              <p>
+                <span className="text-muted-foreground">endpoint:</span> {result.endpoint}
+              </p>
+              <p>
+                <span className="text-muted-foreground">model:</span> {result.model}
+              </p>
+              <p>
+                <span className="text-muted-foreground">status:</span>{" "}
+                <span className={result.ok ? "text-accent" : "text-warn"}>
+                  {result.status ?? "—"} {result.ok ? "OK" : "FAILED"}
+                </span>
+              </p>
+              {result.error && (
+                <p className="text-warn">
+                  <span className="text-muted-foreground">error:</span> {result.error}
+                </p>
+              )}
+              {result.body && (
+                <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-all rounded bg-background p-3 text-[11px] leading-relaxed">
+                  {result.body}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
