@@ -119,6 +119,23 @@ export const createSubmission = createServerFn({ method: "POST" })
     return { id: created.id };
   });
 
+export const setHackathonTreasury = createServerFn({ method: "POST" })
+  .validator((data: { hackathon_id: string; treasury_address: string }) => data)
+  .handler(async ({ data }) => {
+    ensureConfigured();
+    const supabase = getSupabaseServerClient();
+    const address = data.treasury_address.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      throw new Error("Enter a valid EVM wallet address (0x followed by 40 hex characters).");
+    }
+    const { error } = await supabase
+      .from("hackathons")
+      .update({ treasury_address: address })
+      .eq("id", data.hackathon_id);
+    if (error) throw new Error(error.message);
+    return { treasury_address: address };
+  });
+
 export const loadHomeData = createServerFn({ method: "GET" }).handler(async () => getHomeData());
 
 export const loadHackathons = createServerFn({ method: "GET" }).handler(async () => listHackathons());
