@@ -633,7 +633,7 @@ export async function probeJudgeModel(): Promise<{
     const res = await requestJudgeModel(endpoint, config.apiKey, {
       model: config.model,
       messages: [{ role: "user", content: "Reply with the single word OK." }],
-      max_tokens: 16,
+      max_tokens: 2000,
     });
     return {
       configured: true,
@@ -768,6 +768,9 @@ function extractTextFromUnknown(value: unknown): string {
       extractTextFromUnknown(record.output_text),
       extractTextFromUnknown(record.text),
       extractTextFromUnknown(record.content),
+      // OpenAI chat shape: choices[0].message.{content,reasoning}. Reasoning
+      // models (e.g. GLM 5.1) put the answer in message.content, so recurse in.
+      extractTextFromUnknown(record.message),
       extractTextFromUnknown(record.reasoning),
     ]
       .filter(Boolean)
@@ -875,7 +878,10 @@ export async function evaluateSubmissionWithModel(
               { role: "user", content: buildUserPrompt(hackathon, submission, repoContext) },
             ],
             temperature: 0.2,
-            max_tokens: 420,
+            // Reasoning models (GLM 5.1) spend tokens "thinking" before the
+            // answer — 420 was far too small, so content came back null. Give it
+            // room to finish thinking AND write the 5-line verdict.
+            max_tokens: 4000,
           },
         ]
       : [
