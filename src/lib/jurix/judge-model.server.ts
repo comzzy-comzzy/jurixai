@@ -581,8 +581,13 @@ function buildFallbackEvaluation(
   const finalFlags = unique(flags).slice(0, 6);
   const finalEvidence = unique(evidence).slice(0, 6);
 
-  if (reason && reason !== "Judge model returned an empty response.") {
+  if (reason) {
+    // Surface WHY the real model was not used so it can be diagnosed from the
+    // project page (otherwise the fallback looks like a normal, generic score).
     finalFlags.push("fallback_scoring");
+    finalEvidence.unshift(`model_error: ${reason}`.slice(0, 240));
+    // eslint-disable-next-line no-console
+    console.error("[jurix judge] falling back to deterministic score:", reason);
   }
 
   return {
