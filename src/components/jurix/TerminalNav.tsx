@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { AccountButton } from "./AccountButton";
+import { useWallet } from "@/lib/circle/useWallet";
 import logoUrl from "@/assets/jurixai-logo.png";
 
 const NAV = [
@@ -13,6 +14,7 @@ const NAV = [
 
 export function TerminalNav() {
   const [open, setOpen] = useState(false);
+  const { wallet } = useWallet();
 
   return (
     <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

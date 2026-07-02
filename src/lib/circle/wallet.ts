@@ -11,10 +11,13 @@ const CLIENT_KEY = import.meta.env.VITE_CIRCLE_CLIENT_KEY as string | undefined;
 const CLIENT_URL = import.meta.env.VITE_CIRCLE_CLIENT_URL as string | undefined;
 const CHAIN = (import.meta.env.VITE_CIRCLE_CHAIN as string | undefined) || "polygonAmoy";
 
+import type { AuthMethod } from "@/lib/account/types";
+
 export interface CircleWallet {
-  username: string;
+  identifier: string;
   address: string;
   chain: string;
+  authMethod: AuthMethod;
 }
 
 /** True when the Circle publishable keys are present in this build. */
@@ -72,11 +75,11 @@ async function buildSmartAccount(username: string, mode: "register" | "login"): 
 /** Register a new passkey and create the user's Circle smart wallet. */
 export async function createWallet(username: string): Promise<CircleWallet> {
   const address = await buildSmartAccount(username, "register");
-  return { username, address, chain: CHAIN };
+  return { identifier: username, address, chain: CHAIN, authMethod: "passkey" };
 }
 
 /** Log in with an existing passkey and re-derive the user's wallet address. */
 export async function loginWallet(username: string): Promise<CircleWallet> {
   const address = await buildSmartAccount(username, "login");
-  return { username, address, chain: CHAIN };
+  return { identifier: username, address, chain: CHAIN, authMethod: "passkey" };
 }

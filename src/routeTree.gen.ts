@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as HackathonsRouteImport } from './routes/hackathons'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -20,6 +21,11 @@ import { Route as HackathonsIdIndexRouteImport } from './routes/hackathons.$id.i
 import { Route as HackathonsIdSubmitRouteImport } from './routes/hackathons.$id.submit'
 import { Route as HackathonsIdProjectProjectIdRouteImport } from './routes/hackathons.$id.project.$projectId'
 
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HackathonsRoute = HackathonsRouteImport.update({
   id: '/hackathons',
   path: '/hackathons',
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
+  '/profile': typeof ProfileRoute
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
   '/hackathons/': typeof HackathonsIndexRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
+  '/profile': typeof ProfileRoute
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons': typeof HackathonsIndexRoute
   '/hackathons/$id/submit': typeof HackathonsIdSubmitRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
   '/hackathons': typeof HackathonsRouteWithChildren
+  '/profile': typeof ProfileRoute
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons/$id': typeof HackathonsIdRouteWithChildren
   '/hackathons/': typeof HackathonsIndexRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/create'
     | '/hackathons'
+    | '/profile'
     | '/api/judge-deadlines'
     | '/hackathons/$id'
     | '/hackathons/'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/create'
+    | '/profile'
     | '/api/judge-deadlines'
     | '/hackathons'
     | '/hackathons/$id/submit'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/create'
     | '/hackathons'
+    | '/profile'
     | '/api/judge-deadlines'
     | '/hackathons/$id'
     | '/hackathons/'
@@ -149,11 +161,19 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   CreateRoute: typeof CreateRoute
   HackathonsRoute: typeof HackathonsRouteWithChildren
+  ProfileRoute: typeof ProfileRoute
   ApiJudgeDeadlinesRoute: typeof ApiJudgeDeadlinesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hackathons': {
       id: '/hackathons'
       path: '/hackathons'
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   CreateRoute: CreateRoute,
   HackathonsRoute: HackathonsRouteWithChildren,
+  ProfileRoute: ProfileRoute,
   ApiJudgeDeadlinesRoute: ApiJudgeDeadlinesRoute,
 }
 export const routeTree = rootRouteImport

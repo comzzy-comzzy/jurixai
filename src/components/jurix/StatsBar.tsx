@@ -2,11 +2,16 @@ import { formatUsdc } from "@/lib/format";
 import type { HomeStats } from "@/lib/jurix/types";
 
 export function StatsBar({ stats }: { stats: HomeStats }) {
+  const activeHackathons = Number(stats.active_hackathons ?? 0);
+  const totalSubmissions = Number(stats.total_submissions ?? 0);
+  const usdcDistributed = Number(stats.usdc_distributed ?? 0);
+  const verdictsRendered = Number(stats.verdicts_rendered ?? 0);
+
   const items = [
-    { label: "Active hackathons", value: stats.active_hackathons.toString(), accent: false },
-    { label: "Total submissions", value: stats.total_submissions.toLocaleString(), accent: false },
-    { label: "USDC distributed", value: formatUsdc(stats.usdc_distributed), accent: true },
-    { label: "Verdicts rendered", value: stats.verdicts_rendered.toLocaleString(), accent: false },
+    { label: "Active hackathons", value: activeHackathons.toString(), accent: false },
+    { label: "Total submissions", value: totalSubmissions.toLocaleString(), accent: false },
+    { label: "USDC distributed", value: formatUsdc(usdcDistributed), accent: true },
+    { label: "Verdicts rendered", value: verdictsRendered.toLocaleString(), accent: false },
   ];
 
   return (

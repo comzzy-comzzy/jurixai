@@ -780,6 +780,16 @@ function extractTextFromUnknown(value: unknown): string {
   return "";
 }
 
+function extractChoiceText(choice: unknown): string {
+  if (!choice || typeof choice !== "object") return "";
+  const record = choice as Record<string, unknown>;
+  return (
+    extractTextFromUnknown(record.message) ||
+    extractTextFromUnknown(record.delta) ||
+    extractTextFromUnknown(choice)
+  );
+}
+
 async function requestJudgeModel(
   endpoint: string,
   apiKey: string,
@@ -963,7 +973,7 @@ export async function evaluateSubmissionWithModel(
       extractTextFromUnknown(payload.output_text) ||
       extractTextFromUnknown(payload.reply) ||
       extractTextFromUnknown(payload.text) ||
-      extractTextFromUnknown(payload.choices?.[0]) ||
+      extractChoiceText(Array.isArray(payload.choices) ? payload.choices[0] : null) ||
       extractTextFromUnknown(payload.output?.[0]) ||
       extractTextFromUnknown(payload);
 
@@ -998,5 +1008,7 @@ export async function evaluateSubmissionWithModel(
     return validateEvaluation(raw);
   }
 
-  return buildFallbackEvaluation(agent, criterion, hackathon, submission, repoContext, lastError);
+  throw new Error(
+    `Model judging did not produce a valid evaluation. Heuristic fallback is disabled. ${lastError}`,
+  );
 }

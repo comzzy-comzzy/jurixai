@@ -286,90 +286,107 @@ export async function getHomeData(): Promise<HomeData> {
     };
   }
 
-  const supabase = getSupabaseServerClient();
-  const [
-    { data: hackathons, error: hackathonError },
-    { data: agents, error: agentError },
-    { data: scores, error: scoreError },
-  ] = await Promise.all([
-    supabase.from("hackathons").select("*").order("created_at", { ascending: false }).limit(6),
-    supabase.from("judge_agents").select("*").order("weight_percent", { ascending: false }),
-    supabase
-      .from("submission_scores")
-      .select("id, created_at")
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ]);
+  try {
+    const supabase = getSupabaseServerClient();
+    const [
+      { data: hackathons, error: hackathonError },
+      { data: agents, error: agentError },
+      { data: scores, error: scoreError },
+    ] = await Promise.all([
+      supabase.from("hackathons").select("*").order("created_at", { ascending: false }).limit(6),
+      supabase.from("judge_agents").select("*").order("weight_percent", { ascending: false }),
+      supabase
+        .from("submission_scores")
+        .select("id, created_at")
+        .order("created_at", { ascending: false })
+        .limit(8),
+    ]);
 
-  if (hackathonError) throw new Error(hackathonError.message);
-  if (agentError) throw new Error(agentError.message);
-  if (scoreError) throw new Error(scoreError.message);
+    if (hackathonError) throw new Error(hackathonError.message);
+    if (agentError) throw new Error(agentError.message);
+    if (scoreError) throw new Error(scoreError.message);
 
-  const hackathonIds = (hackathons ?? []).map((row) => String(row.id));
-  const counts = await fetchSubmissionCounts(hackathonIds);
-  const featured = (hackathons ?? []).map((row) =>
-    normalizeHackathon(row as Record<string, unknown>, counts.get(String(row.id)) ?? 0),
-  );
+    const hackathonIds = (hackathons ?? []).map((row) => String(row.id));
+    const counts = await fetchSubmissionCounts(hackathonIds);
+    const featured = (hackathons ?? []).map((row) =>
+      normalizeHackathon(row as Record<string, unknown>, counts.get(String(row.id)) ?? 0),
+    );
 
-  const totalSubmissions = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
-  const activeHackathons = featured.filter((h) => h.status === "open").length;
-  const verdictsRendered = (scores ?? []).length;
+    const totalSubmissions = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
+    const activeHackathons = featured.filter((h) => h.status === "open").length;
+    const verdictsRendered = (scores ?? []).length;
 
-  let leaderboardHackathon: HackathonSummary | null = featured[0] ?? null;
-  let leaderboardSubmissions: SubmissionSummary[] = [];
+    let leaderboardHackathon: HackathonSummary | null = featured[0] ?? null;
+    let leaderboardSubmissions: SubmissionSummary[] = [];
 
-  if (leaderboardHackathon) {
-    const { data: registrations, error: registrationError } = await supabase
-      .from("registrations")
-      .select("*")
-      .eq("hackathon_id", leaderboardHackathon.id)
-      .order("created_at", { ascending: false })
-      .limit(5);
+    if (leaderboardHackathon) {
+      const { data: registrations, error: registrationError } = await supabase
+        .from("registrations")
+        .select("*")
+        .eq("hackathon_id", leaderboardHackathon.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    if (registrationError) throw new Error(registrationError.message);
+      if (registrationError) throw new Error(registrationError.message);
 
-    const registrationIds = (registrations ?? []).map((row) => String(row.id));
-    const weighted = await fetchWeightedScores(registrationIds);
-    leaderboardSubmissions = (registrations ?? [])
-      .map((row) =>
-        normalizeSubmission(row as Record<string, unknown>, weighted.get(String(row.id)) ?? 0),
-      )
-      .sort((a, b) => b.weighted_score - a.weighted_score);
+      const registrationIds = (registrations ?? []).map((row) => String(row.id));
+      const weighted = await fetchWeightedScores(registrationIds);
+      leaderboardSubmissions = (registrations ?? [])
+        .map((row) =>
+          normalizeSubmission(row as Record<string, unknown>, weighted.get(String(row.id)) ?? 0),
+        )
+        .sort((a, b) => b.weighted_score - a.weighted_score);
+    }
+
+    const recentActivity: ActivityEvent[] = (scores ?? []).map((row, index) => ({
+      ts: new Date(String(row.created_at)).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }),
+      agent_name: (agents ?? [])[index % Math.max(1, (agents ?? []).length)]?.name ?? "Agent",
+      tone: index % 3 === 0 ? "accent" : index % 3 === 1 ? "ai" : "warn",
+      text:
+        index % 2 === 0
+          ? "Recorded a scoring pass for a live submission."
+          : "Updated evaluation evidence and confidence.",
+    }));
+
+    const normalizedAgents =
+      (agents ?? []).length > 0
+        ? (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>))
+        : FALLBACK_AGENTS;
+
+    return {
+      stats: {
+        active_hackathons: activeHackathons,
+        total_submissions: totalSubmissions,
+        usdc_distributed: 0,
+        verdicts_rendered: verdictsRendered,
+      },
+      featured_hackathons: featured,
+      active_agents: normalizedAgents,
+      recent_activity: recentActivity,
+      leaderboard_hackathon: leaderboardHackathon,
+      leaderboard_submissions: leaderboardSubmissions,
+    };
+  } catch (error) {
+    console.error("getHomeData fallback:", error);
+    return {
+      stats: {
+        active_hackathons: 0,
+        total_submissions: 0,
+        usdc_distributed: 0,
+        verdicts_rendered: 0,
+      },
+      featured_hackathons: [],
+      active_agents: FALLBACK_AGENTS,
+      recent_activity: [],
+      leaderboard_hackathon: null,
+      leaderboard_submissions: [],
+    };
   }
-
-  const recentActivity: ActivityEvent[] = (scores ?? []).map((row, index) => ({
-    ts: new Date(String(row.created_at)).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }),
-    agent_name: (agents ?? [])[index % Math.max(1, (agents ?? []).length)]?.name ?? "Agent",
-    tone: index % 3 === 0 ? "accent" : index % 3 === 1 ? "ai" : "warn",
-    text:
-      index % 2 === 0
-        ? "Recorded a scoring pass for a live submission."
-        : "Updated evaluation evidence and confidence.",
-  }));
-
-  const normalizedAgents =
-    (agents ?? []).length > 0
-      ? (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>))
-      : FALLBACK_AGENTS;
-
-  return {
-    stats: {
-      active_hackathons: activeHackathons,
-      total_submissions: totalSubmissions,
-      usdc_distributed: 0,
-      verdicts_rendered: verdictsRendered,
-    },
-    featured_hackathons: featured,
-    active_agents: normalizedAgents,
-    recent_activity: recentActivity,
-    leaderboard_hackathon: leaderboardHackathon,
-    leaderboard_submissions: leaderboardSubmissions,
-  };
 }
 
 export async function listHackathons(): Promise<HackathonSummary[]> {
