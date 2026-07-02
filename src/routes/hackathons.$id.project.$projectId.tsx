@@ -199,7 +199,9 @@ function ProjectDetail() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">What RelayCart submitted</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                What {project.project_name} submitted
+              </p>
               <p className="text-sm leading-relaxed text-foreground">
                 {project.description ?? "No project description was submitted."}
               </p>

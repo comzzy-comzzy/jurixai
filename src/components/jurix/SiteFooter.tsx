@@ -8,16 +8,23 @@ export function SiteFooter() {
         <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5 font-medium text-accent">
             <span className="size-1.5 rounded-full bg-accent" />
-            Lepton Agents Hackathon · Open
+            Built on Arc · Paid in USDC
           </span>
-          <a href="#" className="hover:text-foreground transition-colors">
-            Documentation
-          </a>
-          <a href="#" className="hover:text-foreground transition-colors">
+          <a
+            href="https://github.com/comzzy-comzzy/jurixai"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground transition-colors"
+          >
             GitHub
           </a>
-          <a href="#" className="hover:text-foreground transition-colors">
-            Circle API
+          <a
+            href="https://www.circle.com"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground transition-colors"
+          >
+            Circle
           </a>
         </div>
       </div>
