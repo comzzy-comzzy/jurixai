@@ -171,6 +171,11 @@ export async function runHackathonJudging(
   let scored = 0;
 
   try {
+    // Build every (criterion × submission) evaluation up front, then run them
+    // with a small concurrency cap. The old code awaited each AI call one at a
+    // time, so a run took the SUM of all calls and blew past the serverless time
+    // limit (stuck on "judging"). Batching cuts that to ~one call per batch.
+    const tasks: Array<() => Promise<void>> = [];
     for (const criterion of hackathon.criteria) {
       const agent =
         hackathon.agents.find((item) => item.id === criterion.agent_id) ??
@@ -178,15 +183,22 @@ export async function runHackathonJudging(
       if (!agent) continue;
 
       for (const submission of hackathon.submissions) {
-        const evaluation = await evaluateSubmissionWithModel(
-          agent,
-          criterion,
-          hackathon,
-          submission,
-        );
-        await writeScore(run.id, submission, criterion, agent, evaluation);
-        scored += 1;
+        tasks.push(async () => {
+          const evaluation = await evaluateSubmissionWithModel(
+            agent,
+            criterion,
+            hackathon,
+            submission,
+          );
+          await writeScore(run.id, submission, criterion, agent, evaluation);
+          scored += 1;
+        });
       }
+    }
+
+    const CONCURRENCY = 5;
+    for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+      await Promise.all(tasks.slice(i, i + CONCURRENCY).map((task) => task()));
     }
 
     await markSubmissionStatuses(hackathon.id, "complete");
