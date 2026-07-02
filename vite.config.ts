@@ -62,7 +62,12 @@ export default defineConfig({
   // Deploy target: Vercel. Nitro emits the Vercel Build Output API (.vercel/output)
   // on production builds. Inside the Lovable editor sandbox this is ignored and the
   // build is forced back to Cloudflare automatically, so the editor preview is unaffected.
-  nitro: { preset: "vercel" },
+  //
+  // maxDuration: AI judging fans out several model calls; the default serverless
+  // timeout is far too short, so runs got killed mid-way and stuck on "judging".
+  // 300s is the Vercel Pro ceiling. (Nitro writes this into the function's
+  // .vc-config.json.)
+  nitro: { preset: "vercel", vercel: { functions: { maxDuration: 300 } } },
   vite: {
     plugins: [clientNodePolyfills()],
     // Dev only: don't esbuild-prebundle Circle's SDK, so its Node-builtin imports go
