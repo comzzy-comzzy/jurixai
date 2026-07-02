@@ -1,8 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { loadHackathons, loadHomeData, triggerHackathonJudging } from "@/lib/jurix/actions.server";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  loadHackathons,
+  loadHomeData,
+  setHackathonTreasury,
+  triggerHackathonJudging,
+} from "@/lib/jurix/actions.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
+import { readUsdcBalance } from "@/lib/chain";
+import type { HackathonSummary } from "@/lib/jurix/types";
 import { fullUsdc, relativeDate } from "@/lib/format";
 
 const ADMIN_PASSWORD = "jurixai2026";
@@ -106,7 +114,7 @@ function Admin() {
                 <th className="p-3 font-medium">Pool</th>
                 <th className="p-3 font-medium">Subs</th>
                 <th className="p-3 font-medium">Deadline</th>
-                <th className="p-3 font-medium">Wallet</th>
+                <th className="p-3 font-medium">Treasury (Arc)</th>
                 <th className="p-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
@@ -125,7 +133,7 @@ function Admin() {
                     {hackathon.deadline ? relativeDate(hackathon.deadline) : "TBD"}
                   </td>
                   <td className="p-3">
-                    <WalletAddress address={hackathon.treasury_address ?? "Treasury pending"} />
+                    <TreasuryCell hackathon={hackathon} />
                   </td>
                   <td className="p-3 text-right">
                     <button
@@ -167,6 +175,102 @@ function Admin() {
           className="text-sm font-medium text-muted-foreground hover:text-warn"
         >
           Log out →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Treasury wallet for a hackathon: the on-chain address that receives entry
+ * fees / prize-pool funding, plus its live USDC balance on Arc. Paste an address
+ * to set it; any USDC sent to it shows up in the balance on refresh.
+ */
+function TreasuryCell({ hackathon }: { hackathon: HackathonSummary }) {
+  const [saved, setSaved] = useState<string>(hackathon.treasury_address ?? "");
+  const [draft, setDraft] = useState<string>(hackathon.treasury_address ?? "");
+  const [editing, setEditing] = useState<boolean>(!hackathon.treasury_address);
+  const [busy, setBusy] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!saved) {
+      setBalance(null);
+      return;
+    }
+    let cancelled = false;
+    readUsdcBalance(saved)
+      .then((b) => !cancelled && setBalance(b))
+      .catch(() => !cancelled && setBalance(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [saved]);
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="0x treasury address"
+          className="w-52 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs outline-none focus:border-accent"
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const res = await setHackathonTreasury({
+                  data: { hackathon_id: hackathon.id, treasury_address: draft },
+                });
+                setSaved(res.treasury_address);
+                setEditing(false);
+                toast.success("Treasury wallet set", { description: res.treasury_address });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Failed to set treasury.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground disabled:opacity-50"
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+          {saved && (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(saved);
+                setEditing(false);
+              }}
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <WalletAddress address={saved} />
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold tabular-nums text-accent">
+          {balance === null
+            ? "balance —"
+            : `${balance.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC`}
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          Edit
         </button>
       </div>
     </div>
