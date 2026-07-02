@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons } from "./data.server";
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
+import { probeJudgeModel } from "./judge-model.server";
 
 type HackathonCriterionInput = {
   name: string;
@@ -135,6 +136,10 @@ export const setHackathonTreasury = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { treasury_address: address };
   });
+
+export const testJudgeModel = createServerFn({ method: "POST" }).handler(async () =>
+  probeJudgeModel(),
+);
 
 export const loadHomeData = createServerFn({ method: "GET" }).handler(async () => getHomeData());
 
