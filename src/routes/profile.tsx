@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownToLine, ArrowUpRight, Copy, RefreshCw, Wallet } from "lucide-react";
+import { ArrowDownToLine, ArrowUpRight, Copy, RefreshCw, Wallet, Edit3, Github, ExternalLink, Video } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWallet } from "@/lib/circle/useWallet";
 import { readUsdcBalance, explorerAddr } from "@/lib/chain";
 import { truncateAddr } from "@/lib/format";
+import { loadJoinedSubmissions, updateSubmission } from "@/lib/jurix/actions.server";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title: "Dashboard — JuriXAI" }] }),
@@ -20,6 +22,26 @@ function ProfileRoute() {
   const [website, setWebsite] = useState("");
   const [payoutEvmAddress, setPayoutEvmAddress] = useState("");
   const [payoutChain, setPayoutChain] = useState("");
+
+  const [joinedSubmissions, setJoinedSubmissions] = useState<any[]>([]);
+  const [loadingJoined, setLoadingJoined] = useState(false);
+
+  const fetchJoined = useCallback(async () => {
+    if (!wallet) return;
+    setLoadingJoined(true);
+    try {
+      const data = await loadJoinedSubmissions();
+      setJoinedSubmissions(data);
+    } catch (e) {
+      console.error("Failed to load joined submissions:", e);
+    } finally {
+      setLoadingJoined(false);
+    }
+  }, [wallet]);
+
+  useEffect(() => {
+    fetchJoined();
+  }, [fetchJoined]);
 
   useEffect(() => {
     setDisplayName(profile?.displayName ?? "");
@@ -70,6 +92,13 @@ function ProfileRoute() {
 
       {/* Balance — the hero card */}
       <BalanceCard address={wallet.address} />
+
+      {/* Joined Hackathons List */}
+      <JoinedHackathonsList
+        submissions={joinedSubmissions}
+        loading={loadingJoined}
+        onRefresh={fetchJoined}
+      />
 
       {/* Two columns: profile form + side settings */}
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_1fr]">
@@ -307,3 +336,360 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
+
+interface EditSubmissionDialogProps {
+  submission: any;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}
+
+function EditSubmissionDialog({ submission, open, onOpenChange, onSaved }: EditSubmissionDialogProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    projectName: submission.project_name || "",
+    teamName: submission.team_name || "",
+    description: submission.description || "",
+    githubUrl: submission.github_url || "",
+    demoUrl: submission.demo_url || "",
+    videoUrl: submission.video_url || "",
+    payoutAddress: submission.payout_address || "",
+  });
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await updateSubmission({
+        data: {
+          submission_id: submission.id,
+          project_name: form.projectName,
+          team_name: form.teamName,
+          description: form.description,
+          github_url: form.githubUrl,
+          demo_url: form.demoUrl || undefined,
+          video_url: form.videoUrl || undefined,
+          payout_address: form.payoutAddress,
+        },
+      });
+      toast.success("Submission updated successfully!");
+      onSaved();
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update submission.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl rounded-2xl p-6 overflow-y-auto max-h-[90vh] bg-card text-card-foreground border border-border">
+        <DialogTitle className="text-xl font-bold tracking-tight">
+          Edit Submission
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground mt-1">
+          Make changes to your project for <strong>{submission.hackathons?.name}</strong>.
+        </p>
+
+        <form onSubmit={handleSave} className="mt-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Project name <span className="text-accent">*</span>
+            </label>
+            <input
+              required
+              value={form.projectName}
+              onChange={(e) => setForm({ ...form, projectName: e.target.value })}
+              placeholder="E.g. JuriXAI"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              Team name <span className="text-accent">*</span>
+            </label>
+            <input
+              required
+              value={form.teamName}
+              onChange={(e) => setForm({ ...form, teamName: e.target.value })}
+              placeholder="E.g. Antigravity Crew"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+              One-line description <span className="text-accent">*</span>
+            </label>
+            <Textarea
+              required
+              rows={3}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="What does your project do?"
+              className="min-h-20 rounded-xl bg-background border border-border px-3.5 py-2 text-sm text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                GitHub repo URL <span className="text-accent">*</span>
+              </label>
+              <input
+                required
+                type="url"
+                value={form.githubUrl}
+                onChange={(e) => setForm({ ...form, githubUrl: e.target.value })}
+                placeholder="https://github.com/..."
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Live demo URL (optional)
+              </label>
+              <input
+                type="url"
+                value={form.demoUrl}
+                onChange={(e) => setForm({ ...form, demoUrl: e.target.value })}
+                placeholder="https://..."
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Video demo URL (optional)
+              </label>
+              <input
+                type="url"
+                value={form.videoUrl}
+                onChange={(e) => setForm({ ...form, videoUrl: e.target.value })}
+                placeholder="https://..."
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Prize payout address <span className="text-accent">*</span>
+              </label>
+              <input
+                required
+                value={form.payoutAddress}
+                onChange={(e) => setForm({ ...form, payoutAddress: e.target.value })}
+                placeholder="0x..."
+                className={`${inputClass} font-mono`}
+              />
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-warn font-medium">{error}</p>}
+
+          <div className="pt-4 border-t border-border flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold hover:bg-muted transition-colors cursor-pointer text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-accent text-accent-foreground px-5 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
+            >
+              {busy ? "Saving changes..." : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function JoinedHackathonsList({
+  submissions,
+  loading,
+  onRefresh,
+}: {
+  submissions: any[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const [editingSubmission, setEditingSubmission] = useState<any | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const isOngoing = (sub: any) => {
+    const hackathon = Array.isArray(sub.hackathons) ? sub.hackathons[0] : sub.hackathons;
+    if (!hackathon) return false;
+    if (hackathon.status !== "open") return false;
+    if (hackathon.deadline) {
+      return new Date(hackathon.deadline) > new Date();
+    }
+    return true;
+  };
+
+  const getStatusLabel = (sub: any) => {
+    const hackathon = Array.isArray(sub.hackathons) ? sub.hackathons[0] : sub.hackathons;
+    if (!hackathon) return "Unknown";
+    if (hackathon.status !== "open") {
+      return hackathon.status === "judging" ? "Judging in Progress" : "Closed";
+    }
+    if (hackathon.deadline && new Date(hackathon.deadline) < new Date()) {
+      return "Deadline Passed";
+    }
+    return "Ongoing";
+  };
+
+  return (
+    <div className="mt-10 rounded-2xl border border-border bg-card p-7 shadow-sm">
+      <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Your Hackathon Registrations</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Hackathons you've joined and your submitted project details.
+          </p>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-input hover:text-foreground transition-colors disabled:opacity-50 cursor-pointer"
+        >
+          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </button>
+      </div>
+
+      {loading && submissions.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          Loading your registrations...
+        </div>
+      ) : submissions.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          <p className="mb-4">You haven't submitted any projects yet.</p>
+          <Link
+            to="/hackathons"
+            className="inline-flex rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-accent-foreground shadow-sm hover:opacity-90 transition-opacity"
+          >
+            Browse Active Hackathons
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2">
+          {submissions.map((sub) => {
+            const hackathon = Array.isArray(sub.hackathons) ? sub.hackathons[0] : sub.hackathons;
+            const ongoing = isOngoing(sub);
+            const statusLabel = getStatusLabel(sub);
+
+            return (
+              <div
+                key={sub.id}
+                className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-background/30 p-5 transition hover:border-border/80 hover:shadow-sm"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-semibold px-2 py-0.5 rounded bg-accent/10">
+                      {hackathon?.name || "Unknown Hackathon"}
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                        ongoing
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {statusLabel}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">
+                    {sub.project_name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">by {sub.team_name}</p>
+
+                  <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
+                    {sub.description || "No description provided."}
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium">
+                    {sub.github_url && (
+                      <a
+                        href={sub.github_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Github className="size-3" /> GitHub
+                      </a>
+                    )}
+                    {sub.demo_url && (
+                      <a
+                        href={sub.demo_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <ExternalLink className="size-3" /> Live Demo
+                      </a>
+                    )}
+                    {sub.video_url && (
+                      <a
+                        href={sub.video_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-muted/60 px-2 py-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Video className="size-3" /> Video
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-border flex items-center justify-between">
+                  <div className="text-[10px] font-mono text-muted-foreground">
+                    Payout: {truncateAddr(sub.payout_address)}
+                  </div>
+
+                  {ongoing ? (
+                    <button
+                      onClick={() => {
+                        setEditingSubmission(sub);
+                        setDialogOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                    >
+                      <Edit3 className="size-3" /> Edit Project
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-muted-foreground italic">
+                      Locked
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editingSubmission && (
+        <EditSubmissionDialog
+          submission={editingSubmission}
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) setEditingSubmission(null);
+          }}
+          onSaved={onRefresh}
+        />
+      )}
+    </div>
+  );
+}
+

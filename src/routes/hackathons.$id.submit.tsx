@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useWallet } from "@/lib/circle/useWallet";
 import { createSubmission, loadHackathonDetail } from "@/lib/jurix/actions.server";
 
 export const Route = createFileRoute("/hackathons/$id/submit")({
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/hackathons/$id/submit")({
 function SubmitProject() {
   const hackathon = Route.useLoaderData();
   const navigate = useNavigate();
+  const { wallet } = useWallet();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -33,6 +35,28 @@ function SubmitProject() {
     videoUrl: "",
     payoutAddress: "",
   });
+
+  if (!wallet) {
+    return (
+      <div className="max-w-md mx-auto px-6 py-20 text-center">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Sign in required</h1>
+          <p className="text-sm text-muted-foreground mt-3 mb-6">
+            You must create an account or log in to submit a project for this hackathon.
+          </p>
+          <div className="flex flex-col gap-2.5">
+            <Link
+              to="/hackathons/$id"
+              params={{ id: hackathon.id }}
+              className="w-full inline-flex justify-center items-center rounded-lg bg-accent text-accent-foreground px-5 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+            >
+              Back to Hackathon
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   async function handleSubmit() {
     setBusy(true);

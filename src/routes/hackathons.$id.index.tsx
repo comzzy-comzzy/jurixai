@@ -1,5 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
+import { useWallet } from "@/lib/circle/useWallet";
 import { loadHackathonDetail } from "@/lib/jurix/actions.server";
 import { Countdown } from "@/components/jurix/Countdown";
 import { JudgeGrid } from "@/components/jurix/JudgePanel";
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/hackathons/$id/")({
 function HackathonDetail() {
   const hackathon = Route.useLoaderData();
   const [tab, setTab] = useState<"leaderboard" | "submissions">("leaderboard");
+  const { wallet } = useWallet();
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -59,13 +62,26 @@ function HackathonDetail() {
           </p>
         </div>
         {hackathon.status === "open" && (
-          <Link
-            to="/hackathons/$id/submit"
-            params={{ id: hackathon.id }}
-            className="shrink-0 rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
-          >
-            Submit project
-          </Link>
+          wallet ? (
+            <Link
+              to="/hackathons/$id/submit"
+              params={{ id: hackathon.id }}
+              className="shrink-0 rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+            >
+              Submit project
+            </Link>
+          ) : (
+            <button
+              onClick={() => {
+                toast.error("Account required", {
+                  description: "Please create an account or sign in using the button in the top right to submit your project.",
+                });
+              }}
+              className="shrink-0 rounded-lg bg-accent/40 text-accent-foreground/75 px-6 py-3 text-sm font-semibold shadow-sm hover:bg-accent/50 transition-colors cursor-pointer"
+            >
+              Register to submit
+            </button>
+          )
         )}
       </header>
 

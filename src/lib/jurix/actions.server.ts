@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getWalletSession } from "@/lib/account/session.server";
 import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons } from "./data.server";
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
@@ -95,16 +96,33 @@ export const createHackathon = createServerFn({ method: "POST" })
     return { id: created.id };
   });
 
+type UpdateSubmissionInput = {
+  submission_id: string;
+  project_name: string;
+  team_name: string;
+  description: string;
+  github_url: string;
+  demo_url?: string;
+  video_url?: string;
+  payout_address: string;
+};
+
 export const createSubmission = createServerFn({ method: "POST" })
   .validator((data: CreateSubmissionInput) => data)
   .handler(async ({ data }) => {
     ensureConfigured();
+    const session = await getWalletSession();
+    const userId = session?.profile?.userId;
+    if (!userId) {
+      throw new Error("You must sign in or create an account to submit a project.");
+    }
     const supabase = getSupabaseServerClient();
 
     const { data: created, error } = await supabase
       .from("registrations")
       .insert({
         hackathon_id: data.hackathon_id,
+        user_id: userId,
         project_name: data.project_name,
         team_name: data.team_name,
         description: data.description,
@@ -119,6 +137,108 @@ export const createSubmission = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     return { id: created.id };
+  });
+
+export const loadJoinedSubmissions = createServerFn({ method: "GET" }).handler(async () => {
+  ensureConfigured();
+  const session = await getWalletSession();
+  const userId = session?.profile?.userId;
+  if (!userId) {
+    return [];
+  }
+
+  const supabase = getSupabaseServerClient();
+  const { data: registrations, error } = await supabase
+    .from("registrations")
+    .select(`
+      id,
+      hackathon_id,
+      project_name,
+      team_name,
+      description,
+      github_url,
+      demo_url,
+      video_url,
+      payout_address,
+      entry_paid,
+      status,
+      created_at,
+      hackathons(
+        id,
+        name,
+        deadline,
+        status,
+        prize_pool_usdc
+      )
+    `)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return registrations;
+});
+
+export const updateSubmission = createServerFn({ method: "POST" })
+  .validator((data: UpdateSubmissionInput) => data)
+  .handler(async ({ data }) => {
+    ensureConfigured();
+    const session = await getWalletSession();
+    const userId = session?.profile?.userId;
+    if (!userId) {
+      throw new Error("You must be logged in to update your submission.");
+    }
+
+    const supabase = getSupabaseServerClient();
+    
+    // First, verify that this submission belongs to the user and is ongoing
+    const { data: registration, error: fetchError } = await supabase
+      .from("registrations")
+      .select("id, hackathon_id, user_id, hackathons(deadline, status)")
+      .eq("id", data.submission_id)
+      .single();
+
+    if (fetchError || !registration) {
+      throw new Error("Submission not found.");
+    }
+
+    if (registration.user_id !== userId) {
+      throw new Error("You do not have permission to edit this submission.");
+    }
+
+    const hackathon = Array.isArray(registration.hackathons)
+      ? registration.hackathons[0]
+      : (registration.hackathons as any);
+      
+    if (!hackathon) {
+      throw new Error("Associated hackathon not found.");
+    }
+
+    if (hackathon.status !== "open") {
+      throw new Error("Cannot modify submission: hackathon is no longer open.");
+    }
+
+    if (hackathon.deadline && new Date(hackathon.deadline) < new Date()) {
+      throw new Error("Cannot modify submission: deadline has passed.");
+    }
+
+    const { data: updated, error } = await supabase
+      .from("registrations")
+      .update({
+        project_name: data.project_name,
+        team_name: data.team_name,
+        description: data.description,
+        github_url: data.github_url,
+        demo_url: data.demo_url || null,
+        video_url: data.video_url || null,
+        payout_address: data.payout_address,
+      })
+      .eq("id", data.submission_id)
+      .select("id")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return { id: updated.id };
   });
 
 export const setHackathonTreasury = createServerFn({ method: "POST" })
