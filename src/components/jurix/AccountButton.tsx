@@ -193,7 +193,7 @@ export function AccountButton() {
                 disabled={busy || !email.trim() || !configured || serverReady === null}
                 onClick={async () => {
                   setOpen(false);
-                  const tid = toast.loading("Requesting code from Circle...");
+                  const tid = toast.loading("Connecting your account...");
                   try {
                     await loginEmail(email.trim());
                     toast.success("Wallet ready", {

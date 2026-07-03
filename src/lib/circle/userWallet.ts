@@ -123,7 +123,7 @@ export async function emailSignIn(email: string): Promise<CircleWallet> {
 
   // 2) Get the wallet. First-time users have none → run the "set PIN + create
   //    wallet" ceremony on the SAME sdk instance, then poll for the address.
-  const prov = await provisionWallet({ data: { userToken: session.userToken } });
+  const prov = await provisionWallet({ data: { userToken: session.userToken, email } });
   let address = prov.address ?? "";
   if (!address && prov.challengeId) {
     sdk.setAuthentication({

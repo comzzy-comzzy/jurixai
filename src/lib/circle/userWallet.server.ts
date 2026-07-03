@@ -47,8 +47,39 @@ export const emailLoginStart = createServerFn({ method: "POST" })
 
 /** Ensure the logged-in user has a wallet; create one if not. */
 export const provisionWallet = createServerFn({ method: "POST" })
-  .validator((d: { userToken: string }) => d)
+  .validator((d: { userToken: string; email: string }) => d)
   .handler(async ({ data }) => {
+    // 1. Fast path: check if user and their wallet already exist in our Supabase DB
+    const url = process.env.VITE_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (url && serviceKey) {
+      const { createClient } = await import("@supabase/supabase-js");
+      const supabase = createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      
+      const { data: user } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", data.email)
+        .maybeSingle();
+        
+      if (user) {
+        const { data: wallet } = await supabase
+          .from("wallets")
+          .select("smart_account")
+          .eq("user_id", user.id)
+          .eq("is_primary", true)
+          .maybeSingle();
+          
+        if (wallet?.smart_account) {
+          return { challengeId: null as string | null, address: wallet.smart_account };
+        }
+      }
+    }
+
+    // 2. Slow path: fallback to Circle API
     const c = client();
     const existing = await c.listWallets({ userToken: data.userToken });
     const wallets = existing.data?.wallets ?? [];
