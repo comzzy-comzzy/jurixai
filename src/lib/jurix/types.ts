@@ -62,6 +62,7 @@ export interface SubmissionScore {
   flags: string[] | null;
   tx_hash?: string | null;
   payment_status?: string | null;
+  fee_amount?: number | null;
   created_at: string;
 }
 

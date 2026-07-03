@@ -511,6 +511,7 @@ export async function getSubmissionDetail(
       if (match) {
         score.tx_hash = match.circle_tx_id || null;
         score.payment_status = match.status || null;
+        score.fee_amount = match.amount_usdc != null ? Number(match.amount_usdc) : null;
       }
     }
     return score;

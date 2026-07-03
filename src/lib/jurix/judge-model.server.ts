@@ -943,7 +943,7 @@ export async function evaluateSubmissionWithModel(
                 content: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
               },
             ],
-            temperature: 0.2,
+            temperature: 0.0,
             // Keep the smoke test and production path aligned: reasoning models
             // need enough output budget to finish their internal reasoning and
             // still emit the required 5-line verdict.

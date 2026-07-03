@@ -345,19 +345,19 @@ function ProjectDetail() {
                           rel="noreferrer"
                           className="text-accent flex items-center gap-1 font-bold hover:underline"
                         >
-                          ✓ Fee Paid: 0.001 USDC <ArrowUpRight className="size-3" />
+                          ✓ Fee Paid: {score.fee_amount ? `${score.fee_amount.toFixed(6)} USDC` : "Calculated USDC"} <ArrowUpRight className="size-3" />
                         </a>
                       ) : score?.payment_status === "pending" ? (
                         <span className="text-warn flex items-center gap-1 font-bold animate-pulse">
-                          ⋯ Fee Pending: 0.001 USDC
+                          ⋯ Fee Pending: {score.fee_amount ? `${score.fee_amount.toFixed(6)} USDC` : "Dynamic USDC"}
                         </span>
                       ) : score?.payment_status === "failed" ? (
                         <span className="text-warn flex items-center gap-1 font-bold">
-                          ✗ Fee Failed: 0.001 USDC
+                          ✗ Fee Failed
                         </span>
                       ) : (
                         <span className="text-muted-foreground flex items-center gap-1 font-semibold">
-                          ✗ Fee Unpaid: 0.001 USDC
+                          ✗ Fee Unpaid
                         </span>
                       )}
                     </div>

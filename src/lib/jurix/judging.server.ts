@@ -266,11 +266,17 @@ export async function runHackathonJudging(
           );
           await writeScore(run.id, submission, criterion, agent, evaluation);
 
-          // Pay the agent 0.001 USDC for evaluating the submission
+          // Calculate dynamic workload fee based on input size and output complexity
+          const workloadLength = (submission.description?.length ?? 0) + (evaluation.rationale?.length ?? 0);
+          const baseFee = 0.0002; // Minimum baseline fee
+          const dynamicFee = baseFee + workloadLength * 0.000001; // $0.000001 (1 Lepton) per character
+          const finalFee = Number(dynamicFee.toFixed(6)); // Limit to USDC decimals
+
+          // Pay the agent the dynamic fee for evaluating the submission
           try {
-            await payAgentForEvaluation(hackathon.id, submission.id, agent);
+            await payAgentForEvaluation(hackathon.id, submission.id, agent, finalFee);
           } catch (payErr) {
-            console.error(`[judging] Payment to agent ${agent.name} failed:`, payErr);
+            console.error(`[judging] Payment of ${finalFee} USDC to agent ${agent.name} failed:`, payErr);
           }
 
           scored += 1;

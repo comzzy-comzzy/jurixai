@@ -197,13 +197,19 @@ function Admin() {
                                 const result = await triggerHackathonJudging({
                                   data: { hackathon_id: hackathon.id, triggered_by: "admin" },
                                 });
-                                setActionMessage(
-                                  `Judging started for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows.`,
-                                );
+                                const msg = `Judging completed for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows and settled agent fees.`;
+                                setActionMessage(msg);
+                                toast.success("Judging Completed!", {
+                                  description: "Successfully evaluated project submissions and paid agent fees.",
+                                  duration: 6000,
+                                });
                               } catch (error) {
-                                setActionMessage(
-                                  error instanceof Error ? error.message : "Failed to trigger judging.",
-                                );
+                                const errMsg = error instanceof Error ? error.message : "Failed to trigger judging.";
+                                setActionMessage(errMsg);
+                                toast.error("Judging Failed", {
+                                  description: errMsg,
+                                  duration: 8000,
+                                });
                               } finally {
                                 setBusyId(null);
                               }
