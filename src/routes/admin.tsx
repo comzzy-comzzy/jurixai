@@ -14,13 +14,16 @@ import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { readUsdcBalance } from "@/lib/chain";
 import type { HackathonSummary } from "@/lib/jurix/types";
 import { fullUsdc, relativeDate } from "@/lib/format";
-
-const ADMIN_PASSWORD = "jurixai2026";
+import { adminLogin, adminLogout, adminStatus } from "@/lib/admin/session.server";
 
 export const Route = createFileRoute("/admin")({
   loader: async () => {
-    const [hackathons, home] = await Promise.all([loadHackathons(), loadHomeData()]);
-    return { hackathons, home };
+    const [hackathons, home, admin] = await Promise.all([
+      loadHackathons(),
+      loadHomeData(),
+      adminStatus(),
+    ]);
+    return { hackathons, home, admin };
   },
   head: () => ({
     meta: [
@@ -32,10 +35,11 @@ export const Route = createFileRoute("/admin")({
 });
 
 function Admin() {
-  const { hackathons, home } = Route.useLoaderData();
-  const [authed, setAuthed] = useState(false);
+  const { hackathons, home, admin } = Route.useLoaderData();
+  const [authed, setAuthed] = useState(admin.authed);
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -50,10 +54,19 @@ function Admin() {
         <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-3">Restricted</p>
         <h1 className="text-2xl font-bold italic tracking-tight mb-6">Operator console</h1>
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (pwd === ADMIN_PASSWORD) setAuthed(true);
-            else setErr("Access denied");
+            setErr("");
+            setLoggingIn(true);
+            try {
+              await adminLogin({ data: { password: pwd } });
+              setAuthed(true);
+              setPwd("");
+            } catch (error) {
+              setErr(error instanceof Error ? error.message : "Access denied");
+            } finally {
+              setLoggingIn(false);
+            }
           }}
           className="space-y-4"
         >
@@ -65,13 +78,21 @@ function Admin() {
               setErr("");
             }}
             placeholder="Admin password"
+            autoComplete="current-password"
             className="w-full rounded-lg bg-background border border-border px-3.5 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
           {err && <p className="text-warn text-sm font-medium">{err}</p>}
-          <button className="w-full rounded-lg bg-accent text-accent-foreground px-5 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity">
-            Authenticate
+          <button
+            disabled={loggingIn || !pwd}
+            className="w-full rounded-lg bg-accent text-accent-foreground px-5 py-3 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {loggingIn ? "Checking…" : "Authenticate"}
           </button>
-          <p className="text-xs text-muted-foreground text-center pt-2">Hint: jurixai2026</p>
+          {!admin.configured && (
+            <p className="text-xs text-warn text-center pt-2">
+              Admin password not set — add JURIX_ADMIN_PASSWORD in Vercel.
+            </p>
+          )}
         </form>
       </div>
     );
@@ -183,7 +204,14 @@ function Admin() {
 
       <div className="mt-6 text-right">
         <button
-          onClick={() => setAuthed(false)}
+          onClick={async () => {
+            try {
+              await adminLogout();
+            } catch {
+              /* ignore */
+            }
+            setAuthed(false);
+          }}
           className="text-sm font-medium text-muted-foreground hover:text-warn"
         >
           Log out →

@@ -3,6 +3,7 @@ import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase
 import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons } from "./data.server";
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
+import { requireAdmin } from "@/lib/admin/guard.server";
 
 type HackathonCriterionInput = {
   name: string;
@@ -123,6 +124,7 @@ export const createSubmission = createServerFn({ method: "POST" })
 export const setHackathonTreasury = createServerFn({ method: "POST" })
   .validator((data: { hackathon_id: string; treasury_address: string }) => data)
   .handler(async ({ data }) => {
+    await requireAdmin();
     ensureConfigured();
     const supabase = getSupabaseServerClient();
     const address = data.treasury_address.trim();
@@ -137,9 +139,10 @@ export const setHackathonTreasury = createServerFn({ method: "POST" })
     return { treasury_address: address };
   });
 
-export const testJudgeModel = createServerFn({ method: "POST" }).handler(async () =>
-  probeJudgeModel(),
-);
+export const testJudgeModel = createServerFn({ method: "POST" }).handler(async () => {
+  await requireAdmin();
+  return probeJudgeModel();
+});
 
 export const loadHomeData = createServerFn({ method: "GET" }).handler(async () => getHomeData());
 
@@ -168,6 +171,7 @@ export const loadSubmissionDetail = createServerFn({ method: "GET" })
 export const triggerHackathonJudging = createServerFn({ method: "POST" })
   .validator((data: { hackathon_id: string; triggered_by?: string }) => data)
   .handler(async ({ data }) => {
+    await requireAdmin();
     const hackathon = await getHackathonDetail(data.hackathon_id);
     if (!hackathon) throw new Error("Hackathon not found.");
     return runHackathonJudging(hackathon, data.triggered_by ?? "admin");
