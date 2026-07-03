@@ -8,12 +8,13 @@ import {
   setHackathonTreasury,
   testJudgeModel,
   triggerHackathonJudging,
+  disburseHackathonPrizes,
 } from "@/lib/jurix/actions.server";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
-import { readUsdcBalance } from "@/lib/chain";
+import { readUsdcBalance, explorerTx } from "@/lib/chain";
 import type { HackathonSummary } from "@/lib/jurix/types";
-import { fullUsdc, relativeDate } from "@/lib/format";
+import { fullUsdc, relativeDate, truncateAddr } from "@/lib/format";
 import { adminLogin, adminLogout, adminStatus } from "@/lib/admin/session.server";
 
 export const Route = createFileRoute("/admin")({
@@ -278,6 +279,15 @@ function Admin() {
                               </div>
 
                               <TreasuryVerificationCell hackathon={hackathon} totalFunding={totalFunding} />
+
+                              {hackathon.status === "closed" && (
+                                <div className="mt-4 pt-4 border-t border-border/80 col-span-2">
+                                  <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-3">
+                                    Winner Prize Distribution
+                                  </h4>
+                                  <PrizeDisbursmentPanel hackathon={hackathon} />
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -521,6 +531,68 @@ function TreasuryVerificationCell({ hackathon, totalFunding }: { hackathon: Hack
         </p>
         <p><span className="text-muted-foreground">Required:</span> {totalFunding.toLocaleString()} USDC</p>
       </div>
+    </div>
+  );
+}
+
+function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
+  const [busy, setBusy] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [payouts, setPayouts] = useState<any[] | null>(null);
+
+  const handleDisburse = async () => {
+    setBusy(true);
+    try {
+      const res = await disburseHackathonPrizes({ data: { hackathon_id: hackathon.id } });
+      if (res.success) {
+        toast.success("Prize Distribution Complete!", {
+          description: `Successfully disbursed prize rewards to ${res.paidCount} winners on-chain.`,
+        });
+        setPayouts(res.payouts);
+      }
+    } catch (e) {
+      toast.error("Distribution Failed", {
+        description: e instanceof Error ? e.message : "Failed to disburse payouts.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
+          Disburse the **{hackathon.prize_pool_usdc.toLocaleString()} USDC** prize pool on-chain to the top projects according to the configured reward split ({hackathon.winner_split?.join(" / ")}%).
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={handleDisburse}
+          className="shrink-0 rounded-lg bg-accent text-accent-foreground px-4 py-2 text-xs font-semibold shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
+        >
+          {busy ? "Disbursing..." : "Disburse Rewards ↗"}
+        </button>
+      </div>
+
+      {payouts && payouts.length > 0 && (
+        <div className="mt-4 space-y-2 border-t border-border pt-3">
+          <p className="text-[11px] font-bold text-accent">Confirmed Disbursements:</p>
+          {payouts.map((p, i) => (
+            <div key={i} className="flex justify-between items-center text-xs font-mono bg-muted/40 p-2 rounded">
+              <span>{p.name} ({p.amount} USDC)</span>
+              <a
+                href={explorerTx(p.txHash)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent flex items-center gap-1 hover:underline text-[10px]"
+              >
+                Tx: {truncateAddr(p.txHash)} ↗
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

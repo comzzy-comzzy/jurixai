@@ -98,11 +98,39 @@ export const provisionWallet = createServerFn({ method: "POST" })
     return { challengeId: created.data?.challengeId ?? null, address: null as string | null };
   });
 
-/** Read back the user's first wallet address. */
+/** Read back the user's first wallet address and ID. */
 export const listUserWallets = createServerFn({ method: "POST" })
   .validator((d: { userToken: string }) => d)
   .handler(async ({ data }) => {
     const res = await client().listWallets({ userToken: data.userToken });
     const w = res.data?.wallets?.[0];
-    return { address: w?.address ?? null, blockchain: w?.blockchain ?? null };
+    return { id: w?.id ?? null, address: w?.address ?? null, blockchain: w?.blockchain ?? null };
+  });
+
+/** Create a transfer challenge for withdrawing USDC from a user's wallet. */
+export const createWithdrawalTransaction = createServerFn({ method: "POST" })
+  .validator(
+    (d: {
+      userToken: string;
+      walletId: string;
+      recipientAddress: string;
+      amount: number;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const c = client();
+    const res = await c.createTransaction({
+      userToken: data.userToken,
+      idempotencyKey: crypto.randomUUID(),
+      walletId: data.walletId,
+      amounts: [String(data.amount)],
+      destinationAddress: data.recipientAddress,
+      fee: {
+        type: "level",
+        config: {
+          feeLevel: "LOW",
+        },
+      },
+    });
+    return { challengeId: res.data?.challengeId ?? null };
   });

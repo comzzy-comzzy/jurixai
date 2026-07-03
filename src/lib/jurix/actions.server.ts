@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getWalletSession } from "@/lib/account/session.server";
-import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons } from "./data.server";
+import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons, fetchWeightedScores } from "./data.server";
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
 import { requireAdmin } from "@/lib/admin/guard.server";
+import { sendUsdc } from "@/lib/chain";
 
 type HackathonCriterionInput = {
   name: string;
@@ -349,4 +350,131 @@ export const triggerExpiredHackathons = createServerFn({ method: "POST" })
   .validator((data: { triggered_by?: string } | undefined) => data)
   .handler(async ({ data }) => {
     return runExpiredHackathons(data?.triggered_by ?? "cron");
+  });
+
+/** Disburse prize pool funds on-chain to the hackathon winners based on the configured split. */
+export const disburseHackathonPrizes = createServerFn({ method: "POST" })
+  .validator((data: { hackathon_id: string }) => data)
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    ensureConfigured();
+    const supabase = getSupabaseServerClient();
+
+    // 1. Fetch hackathon details
+    const hackathon = await getHackathonDetail(data.hackathon_id);
+    if (!hackathon) throw new Error("Hackathon not found.");
+    if (hackathon.status !== "closed") {
+      throw new Error("Hackathon must be closed/judged to disburse rewards.");
+    }
+
+    const submissions = hackathon.submissions ?? [];
+    if (submissions.length === 0) {
+      throw new Error("No submissions to pay out.");
+    }
+
+    const subIds = submissions.map((s) => s.id);
+
+    // Calculate ranked leaderboard using weighted scores
+    const scoreMap = await fetchWeightedScores(subIds);
+    const ranked = submissions
+      .map((sub) => ({
+        ...sub,
+        score: scoreMap.get(sub.id) ?? 0,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const winnerSplit = hackathon.winner_split || [50, 30, 20];
+    const payouts: { registrationId: string; address: string; amount: number; name: string }[] = [];
+
+    for (let i = 0; i < winnerSplit.length; i++) {
+      const percent = winnerSplit[i];
+      const project = ranked[i];
+      if (!project) break; // If there are fewer projects than split allocations
+
+      const payoutAddress = project.payout_address?.trim();
+      if (!payoutAddress || !/^0x[a-fA-F0-9]{40}$/.test(payoutAddress)) {
+        console.warn(`[payout] Winner rank ${i + 1} (${project.project_name}) has no valid payout address.`);
+        continue;
+      }
+
+      const reward = Number(((hackathon.prize_pool_usdc * percent) / 100).toFixed(6));
+      if (reward <= 0) continue;
+
+      payouts.push({
+        registrationId: project.id,
+        address: payoutAddress,
+        amount: reward,
+        name: project.project_name,
+      });
+    }
+
+    if (payouts.length === 0) {
+      throw new Error("No winners with valid payout addresses found.");
+    }
+
+    // Verify if we already disbursed winner rewards
+    const recipientAddresses = payouts.map((p) => p.address.toLowerCase());
+    const { data: done } = await supabase
+      .from("payments")
+      .select("to_address")
+      .eq("hackathon_id", data.hackathon_id)
+      .eq("kind", "payout")
+      .in("registration_id", subIds);
+    
+    const alreadyPaid = (done ?? []).some((p) =>
+      recipientAddresses.includes(String(p.to_address).toLowerCase())
+    );
+
+    if (alreadyPaid) {
+      throw new Error("Prizes have already been disbursed for this hackathon.");
+    }
+
+    // Process prize disbursements sequentially
+    const results: { address: string; amount: number; txHash: string; name: string }[] = [];
+    for (const p of payouts) {
+      console.log(`[payout] Sending reward of ${p.amount} USDC to ${p.name} (${p.address})`);
+
+      const { data: record, error: insErr } = await supabase
+        .from("payments")
+        .insert({
+          kind: "payout",
+          hackathon_id: data.hackathon_id,
+          registration_id: p.registrationId,
+          to_address: p.address,
+          amount_usdc: p.amount,
+          status: "pending",
+        })
+        .select("id")
+        .single();
+      
+      if (insErr || !record) {
+        console.error(`[payout] Failed to log payment pending record:`, insErr);
+        continue;
+      }
+
+      try {
+        const txHash = await sendUsdc(p.address, p.amount);
+
+        await supabase
+          .from("payments")
+          .update({
+            circle_tx_id: txHash,
+            status: "confirmed",
+          })
+          .eq("id", record.id);
+        
+        results.push({ address: p.address, amount: p.amount, txHash, name: p.name });
+      } catch (txErr) {
+        console.error(`[payout] On-chain reward transfer failed for ${p.address}:`, txErr);
+        await supabase
+          .from("payments")
+          .update({
+            status: "failed",
+            error_message: txErr instanceof Error ? txErr.message : String(txErr),
+          })
+          .eq("id", record.id);
+      }
+    }
+
+    return { success: true, paidCount: results.length, payouts: results };
   });

@@ -139,3 +139,81 @@ export async function emailSignIn(email: string): Promise<CircleWallet> {
   }
   return { identifier: email, address, chain: CHAIN, authMethod: "email" };
 }
+
+/**
+ * Execute a USDC transfer out of the user's smart wallet to a destination EVM address.
+ * Initiates an email OTP session for authorization, generates the challenge, and prompts the user's PIN.
+ */
+export async function executeWithdrawal(
+  email: string,
+  recipientAddress: string,
+  amount: number,
+): Promise<void> {
+  if (!APP_ID) throw new Error("Circle App ID is missing (VITE_CIRCLE_APP_ID).");
+  await ensureBrowserGlobals();
+  const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+  const { createWithdrawalTransaction } = await import("./userWallet.server");
+
+  // 1) Authenticate with the email OTP. onLoginComplete yields the session.
+  let resolveLogin!: (s: Session) => void;
+  let rejectLogin!: (e: Error) => void;
+  const loginDone = new Promise<Session>((res, rej) => {
+    resolveLogin = res;
+    rejectLogin = rej;
+  });
+
+  const sdk: W3S = new W3SSdk(
+    { appSettings: { appId: APP_ID } },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (error: any, result: any) => {
+      if (error) return rejectLogin(new Error(error?.message || "Email verification failed."));
+      const userToken = result?.userToken ?? result?.data?.userToken;
+      const encryptionKey = result?.encryptionKey ?? result?.data?.encryptionKey;
+      if (!userToken || !encryptionKey) {
+        return rejectLogin(new Error("Verification did not return a session."));
+      }
+      resolveLogin({ userToken, encryptionKey });
+    },
+  );
+
+  const deviceId = await sdk.getDeviceId();
+  const tok = await emailLoginStart({ data: { email, deviceId } });
+  sdk.updateConfigs({
+    appSettings: { appId: APP_ID },
+    loginConfigs: {
+      deviceToken: tok.deviceToken,
+      deviceEncryptionKey: tok.deviceEncryptionKey,
+      otpToken: tok.otpToken,
+    },
+  });
+  sdk.verifyOtp();
+
+  const session = await loginDone;
+
+  // 2) Get the wallet ID
+  const list = await listUserWallets({ data: { userToken: session.userToken } });
+  if (!list.id) {
+    throw new Error("Could not locate your wallet ID.");
+  }
+
+  // 3) Create the withdrawal transaction (yields a challengeId)
+  const tx = await createWithdrawalTransaction({
+    data: {
+      userToken: session.userToken,
+      walletId: list.id,
+      recipientAddress,
+      amount,
+    },
+  });
+
+  if (!tx.challengeId) {
+    throw new Error("Failed to generate withdrawal challenge.");
+  }
+
+  // 4) Execute the challenge (PIN verification prompt)
+  sdk.setAuthentication({
+    userToken: session.userToken,
+    encryptionKey: session.encryptionKey,
+  });
+  await runChallenge(sdk, tx.challengeId);
+}

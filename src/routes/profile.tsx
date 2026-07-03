@@ -111,7 +111,11 @@ function ProfileRoute() {
       </header>
 
       {/* Balance — the hero card */}
-      <BalanceCard address={wallet.address} />
+      <BalanceCard
+        address={wallet.address}
+        email={wallet.identifier}
+        payoutEvmAddress={payoutEvmAddress}
+      />
 
       {/* Hackathons you host */}
       <HostedHackathonsList
@@ -270,10 +274,24 @@ function ProfileRoute() {
 }
 
 /** Prominent Arc USDC balance card with deposit + (soon) withdraw. */
-function BalanceCard({ address }: { address: string }) {
+function BalanceCard({
+  address,
+  email,
+  payoutEvmAddress,
+}: {
+  address: string;
+  email: string;
+  payoutEvmAddress: string;
+}) {
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+
+  // Withdrawal States
+  const [isOpen, setIsOpen] = useState(false);
+  const [recipient, setRecipient] = useState(payoutEvmAddress || "");
+  const [amount, setAmount] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -290,6 +308,44 @@ function BalanceCard({ address }: { address: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (payoutEvmAddress) {
+      setRecipient(payoutEvmAddress);
+    }
+  }, [payoutEvmAddress]);
+
+  const handleWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recipient.trim()) {
+      toast.error("Withdrawal Address required", { description: "Please enter a destination EVM address." });
+      return;
+    }
+    const val = Number(amount);
+    if (Number.isNaN(val) || val <= 0) {
+      toast.error("Invalid amount", { description: "Please enter a valid positive USDC amount." });
+      return;
+    }
+    if (balance !== null && val > balance) {
+      toast.error("Insufficient balance", { description: `Your maximum withdrawable balance is ${balance} USDC.` });
+      return;
+    }
+
+    setWithdrawing(true);
+    toast.info("Initiating withdrawal...", { description: "We will trigger an email verification OTP to authenticate you." });
+    try {
+      const { executeWithdrawal } = await import("@/lib/circle/userWallet");
+      await executeWithdrawal(email, recipient.trim(), val);
+      toast.success("Withdrawal successful!", { description: `Successfully transferred ${val} USDC to ${recipient.trim()}` });
+      setIsOpen(false);
+      setAmount("");
+      void load();
+    } catch (err) {
+      toast.error("Withdrawal failed", { description: err instanceof Error ? err.message : "An error occurred." });
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-7 shadow-sm">
@@ -339,15 +395,84 @@ function BalanceCard({ address }: { address: string }) {
           </button>
           <button
             type="button"
-            onClick={() => toast("Withdrawals are coming soon", {
-              description: "You'll be able to send USDC to any EVM wallet from here.",
-            })}
+            onClick={() => setIsOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 transition-opacity"
           >
             <ArrowUpRight className="size-4" /> Withdraw
           </button>
         </div>
       </div>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogTitle className="text-xl font-bold tracking-tight italic">Withdraw USDC</DialogTitle>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Send Arc USDC from your smart wallet to any external EVM address. Requires email verification.
+          </p>
+          <form onSubmit={handleWithdraw} className="mt-4 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                Recipient EVM Address
+              </label>
+              <input
+                required
+                type="text"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="0x..."
+                className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  USDC Amount
+                </label>
+                <button
+                  type="button"
+                  onClick={() => balance !== null && setAmount(balance.toFixed(6))}
+                  className="text-xs font-semibold text-accent hover:underline"
+                >
+                  Max ({balance !== null ? balance.toFixed(2) : "0.00"} USDC)
+                </button>
+              </div>
+              <input
+                required
+                type="number"
+                step="any"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent"
+              />
+            </div>
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                disabled={withdrawing}
+                onClick={() => setIsOpen(false)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={withdrawing}
+                className="flex-1 rounded-xl bg-accent text-accent-foreground py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {withdrawing ? (
+                  <>
+                    <RefreshCw className="size-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Confirm"
+                )}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

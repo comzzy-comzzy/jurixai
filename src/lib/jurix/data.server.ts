@@ -246,7 +246,7 @@ async function fetchSubmissionCounts(hackathonIds: string[]) {
   return counts;
 }
 
-async function fetchWeightedScores(registrationIds: string[]) {
+export async function fetchWeightedScores(registrationIds: string[]) {
   const supabase = getSupabaseServerClient();
   const scoreMap = new Map<string, number>();
   if (registrationIds.length === 0) return scoreMap;
