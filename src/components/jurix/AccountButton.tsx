@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, Copy, Fingerprint, LogOut, Mail } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWallet } from "@/lib/circle/useWallet";
@@ -14,6 +14,7 @@ type Step = "choose" | "email" | "passkey";
 
 export function AccountButton() {
   const { wallet, busy, error, loginEmail, signOut, signUp, logIn } = useWallet();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("choose");
   const [email, setEmail] = useState("");
@@ -70,9 +71,13 @@ export function AccountButton() {
           <Copy className="size-3" />
         </button>
         <button
-          onClick={signOut}
+          onClick={() => {
+            signOut();
+            router.invalidate();
+            router.navigate({ to: "/" });
+          }}
           title="Sign out"
-          className="rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
         >
           <LogOut className="size-4" />
         </button>
@@ -121,7 +126,7 @@ export function AccountButton() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm rounded-2xl p-6">
+        <DialogContent className="max-w-sm rounded-2xl p-6" onCloseAutoFocus={(e) => e.preventDefault()}>
           <div className="flex flex-col items-center text-center">
             <img src={logoUrl} alt="JuriXAI" className="size-10 object-contain mb-3" />
             <DialogTitle className="text-xl font-bold tracking-tight">{title}</DialogTitle>
@@ -195,6 +200,8 @@ export function AccountButton() {
                       id: tid,
                       description: "Your Circle wallet is connected.",
                     });
+                    router.invalidate();
+                    router.navigate({ to: "/profile" });
                   } catch (err) {
                     const msg = err instanceof Error ? err.message : "Email login failed";
                     toast.error("Login failed", {
@@ -239,11 +246,13 @@ export function AccountButton() {
                       await signUp(handle.trim());
                       setOpen(false);
                       toast.success("Passkey wallet created");
+                      router.invalidate();
+                      router.navigate({ to: "/profile" });
                     } catch {
                       /* error shown inline */
                     }
                   }}
-                  className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
                 >
                   {busy ? "Working…" : "Create"}
                 </button>
@@ -254,11 +263,13 @@ export function AccountButton() {
                       await logIn(handle.trim());
                       setOpen(false);
                       toast.success("Passkey wallet connected");
+                      router.invalidate();
+                      router.navigate({ to: "/profile" });
                     } catch {
                       /* error shown inline */
                     }
                   }}
-                  className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                  className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {busy ? "Working…" : "Sign in"}
                 </button>
