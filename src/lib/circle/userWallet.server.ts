@@ -120,17 +120,31 @@ export const createWithdrawalTransaction = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const c = client();
-    // Map blockchain parameter to TokenBlockchain type
-    const blockchainParam = (CHAIN_NAME === "polygonAmoy" ? "MATIC-AMOY" : CHAIN_NAME) as any;
 
+    // 1. Fetch user's token balances to find the dynamic USDC tokenId registered by Circle for this wallet
+    const balancesRes = await c.getWalletTokenBalance({
+      walletId: data.walletId,
+      userToken: data.userToken,
+    });
+
+    const tokenBalances = balancesRes.data?.tokenBalances ?? [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usdcToken = tokenBalances.find((tb: any) => tb.token?.symbol?.toUpperCase() === "USDC");
+
+    if (!usdcToken || !usdcToken.token?.id) {
+      throw new Error("USDC token balance not found. Please make sure this wallet holds USDC before attempting a withdrawal.");
+    }
+
+    const tokenId = usdcToken.token.id;
+
+    // 2. Create the withdrawal transaction using the resolved tokenId
     const res = await c.createTransaction({
       userToken: data.userToken,
       idempotencyKey: crypto.randomUUID(),
       walletId: data.walletId,
       amounts: [String(data.amount)],
       destinationAddress: data.recipientAddress,
-      tokenAddress: USDC_ADDRESS,
-      blockchain: blockchainParam,
+      tokenId: tokenId,
       fee: {
         type: "level",
         config: {
