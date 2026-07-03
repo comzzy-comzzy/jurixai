@@ -53,6 +53,12 @@ export function TerminalNav() {
                 {item.label}
               </Link>
             ))}
+            <a
+              href="mailto:jurixai67@gmail.com"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              Support
+            </a>
           </div>
 
           <AccountButton />
@@ -79,15 +85,22 @@ export function TerminalNav() {
                 key={item.to}
                 to={item.to}
                 onClick={() => setOpen(false)}
-                className="border-b border-border/60 py-3 text-sm font-medium text-muted-foreground last:border-b-0 hover:text-foreground transition-colors"
+                className="border-b border-border/60 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 activeProps={{
                   className:
-                    "border-b border-border/60 py-3 text-sm font-semibold text-foreground last:border-b-0",
+                    "border-b border-border/60 py-3 text-sm font-semibold text-foreground",
                 }}
               >
                 {item.label}
               </Link>
             ))}
+            <a
+              href="mailto:jurixai67@gmail.com"
+              onClick={() => setOpen(false)}
+              className="py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              Support
+            </a>
           </div>
         </div>
       )}
