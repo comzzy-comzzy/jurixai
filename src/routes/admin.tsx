@@ -188,37 +188,69 @@ function Admin() {
                           >
                             View entries
                           </Link>
-                          <button
-                            type="button"
-                            disabled={busyId === hackathon.id}
-                            onClick={async () => {
-                              setBusyId(hackathon.id);
-                              setActionMessage(null);
-                              try {
-                                const result = await triggerHackathonJudging({
-                                  data: { hackathon_id: hackathon.id, triggered_by: "admin" },
-                                });
-                                const msg = `Judging completed for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows and settled agent fees.`;
-                                setActionMessage(msg);
-                                toast.success("Judging Completed!", {
-                                  description: "Successfully evaluated project submissions and paid agent fees.",
-                                  duration: 6000,
-                                });
-                              } catch (error) {
-                                const errMsg = error instanceof Error ? error.message : "Failed to trigger judging.";
-                                setActionMessage(errMsg);
-                                toast.error("Judging Failed", {
-                                  description: errMsg,
-                                  duration: 8000,
-                                });
-                              } finally {
-                                setBusyId(null);
-                              }
-                            }}
-                            className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
-                          >
-                            {busyId === hackathon.id ? "Running…" : "Run judging"}
-                          </button>
+                          {hackathon.status === "open" || hackathon.status === "judging" ? (
+                            <button
+                              type="button"
+                              disabled={busyId === hackathon.id}
+                              onClick={async () => {
+                                setBusyId(hackathon.id);
+                                setActionMessage(null);
+                                try {
+                                  const result = await triggerHackathonJudging({
+                                    data: { hackathon_id: hackathon.id, triggered_by: "admin" },
+                                  });
+                                  const msg = `Judging completed for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows and settled agent fees.`;
+                                  setActionMessage(msg);
+                                  toast.success("Judging Completed!", {
+                                    description: "Successfully evaluated project submissions and paid agent fees.",
+                                    duration: 6000,
+                                  });
+                                } catch (error) {
+                                  const errMsg = error instanceof Error ? error.message : "Failed to trigger judging.";
+                                  setActionMessage(errMsg);
+                                  toast.error("Judging Failed", {
+                                    description: errMsg,
+                                    duration: 8000,
+                                  });
+                                } finally {
+                                  setBusyId(null);
+                                }
+                              }}
+                              className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+                            >
+                              {busyId === hackathon.id ? "Running…" : "Run judging"}
+                            </button>
+                          ) : hackathon.status === "closed" ? (
+                            <button
+                              type="button"
+                              disabled={busyId === hackathon.id}
+                              onClick={async () => {
+                                setBusyId(hackathon.id);
+                                setActionMessage(null);
+                                try {
+                                  const res = await disburseHackathonPrizes({
+                                    data: { hackathon_id: hackathon.id },
+                                  });
+                                  toast.success("Prize Distribution Complete!", {
+                                    description: `Successfully disbursed rewards to ${res.paidCount} winners on-chain.`,
+                                    duration: 8000,
+                                  });
+                                } catch (error) {
+                                  const errMsg = error instanceof Error ? error.message : "Failed to disburse payouts.";
+                                  setActionMessage(errMsg);
+                                  toast.error("Distribution Failed", {
+                                    description: errMsg,
+                                    duration: 8000,
+                                  });
+                                } finally {
+                                  setBusyId(null);
+                                }
+                              }}
+                              className="rounded-md bg-accent text-accent-foreground px-3 py-1 font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                            >
+                              {busyId === hackathon.id ? "Disbursing…" : "Disburse Prizes ↗"}
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
