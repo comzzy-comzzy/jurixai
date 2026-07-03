@@ -61,10 +61,14 @@ function runChallenge(sdk: W3S, challengeId: string): Promise<void> {
 }
 
 /** Poll for the wallet address (it materializes shortly after the PIN ceremony). */
-async function waitForWalletAddress(userToken: string, tries = 20): Promise<string> {
+async function waitForWalletAddress(userToken: string, tries = 30): Promise<string> {
   for (let i = 0; i < tries; i++) {
-    const list = await listUserWallets({ data: { userToken } });
-    if (list.address) return list.address;
+    try {
+      const list = await listUserWallets({ data: { userToken } });
+      if (list && list.address) return list.address;
+    } catch (e) {
+      console.warn("[waitForWalletAddress] polling error (retrying):", e);
+    }
     await new Promise((r) => setTimeout(r, 1500));
   }
   return "";
