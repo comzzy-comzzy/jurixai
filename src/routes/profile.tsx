@@ -287,8 +287,9 @@ function BalanceCard({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
-  // Withdrawal States
-  const [isOpen, setIsOpen] = useState(false);
+  // Dialog States
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [recipient, setRecipient] = useState(payoutEvmAddress || "");
   const [amount, setAmount] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
@@ -340,7 +341,7 @@ function BalanceCard({
         description: `Successfully sent ${val} USDC to ${recipient.trim()}. Balance will update once confirmed on-chain.`,
         duration: 6000 
       });
-      setIsOpen(false);
+      setIsWithdrawOpen(false);
       setAmount("");
       
       // Wait 4 seconds for the transaction to be mined on Arc Testnet before reloading balance
@@ -390,19 +391,14 @@ function BalanceCard({
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => {
-              navigator.clipboard?.writeText(address);
-              toast.success("Wallet address copied", {
-                description: "Send Arc USDC here — it'll show in your balance.",
-              });
-            }}
+            onClick={() => setIsDepositOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
           >
             <ArrowDownToLine className="size-4" /> Deposit
           </button>
           <button
             type="button"
-            onClick={() => setIsOpen(true)}
+            onClick={() => setIsWithdrawOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 transition-opacity"
           >
             <ArrowUpRight className="size-4" /> Withdraw
@@ -410,7 +406,47 @@ function BalanceCard({
         </div>
       </div>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {/* Deposit Dialog with QR Code and Copy Address */}
+      <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogTitle className="text-xl font-bold tracking-tight italic text-center">Receive USDC</DialogTitle>
+          <div className="mt-4 flex flex-col items-center gap-5">
+            {/* QR Code Container */}
+            <div className="rounded-xl border border-border bg-white p-3 shadow-inner">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${address}`}
+                alt="Deposit QR Code"
+                width={200}
+                height={200}
+                className="size-44 object-contain"
+              />
+            </div>
+            
+            {/* Instructions */}
+            <p className="text-center text-xs text-muted-foreground leading-relaxed max-w-[280px]">
+              Scan this code to send **USDC** (or native gas tokens) on **Arc Testnet** to your smart wallet.
+            </p>
+
+            {/* Address Row */}
+            <div className="w-full flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs text-foreground select-all break-all gap-2">
+              <span className="truncate flex-1">{address}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(address);
+                  toast.success("Wallet address copied");
+                }}
+                className="shrink-0 rounded bg-accent px-2 py-1 text-[10px] font-semibold text-accent-foreground hover:opacity-90 transition-opacity"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Withdraw Dialog */}
+      <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogTitle className="text-xl font-bold tracking-tight italic">Withdraw USDC</DialogTitle>
           <p className="text-xs text-muted-foreground -mt-2">
@@ -457,7 +493,7 @@ function BalanceCard({
               <button
                 type="button"
                 disabled={withdrawing}
-                onClick={() => setIsOpen(false)}
+                onClick={() => setIsWithdrawOpen(false)}
                 className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50"
               >
                 Cancel

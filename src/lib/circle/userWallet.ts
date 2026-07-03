@@ -210,10 +210,11 @@ export async function executeWithdrawal(
     throw new Error("Failed to generate withdrawal challenge.");
   }
 
-  // 4) Execute the challenge (PIN verification prompt)
-  sdk.setAuthentication({
+  // 4) Execute the challenge (PIN verification prompt) using a fresh SDK instance to avoid state pollution
+  const sdkChallenge = new W3SSdk({ appSettings: { appId: APP_ID } });
+  sdkChallenge.setAuthentication({
     userToken: session.userToken,
     encryptionKey: session.encryptionKey,
   });
-  await runChallenge(sdk, tx.challengeId);
+  await runChallenge(sdkChallenge, tx.challengeId);
 }

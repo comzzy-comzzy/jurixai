@@ -120,37 +120,46 @@ export const createWithdrawalTransaction = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const c = client();
-
-    // 1. Fetch user's token balances to find the dynamic USDC tokenId registered by Circle for this wallet
-    const balancesRes = await c.getWalletTokenBalance({
-      walletId: data.walletId,
-      userToken: data.userToken,
-    });
-
-    const tokenBalances = balancesRes.data?.tokenBalances ?? [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const usdcToken = tokenBalances.find((tb: any) => tb.token?.symbol?.toUpperCase() === "USDC");
-
-    if (!usdcToken || !usdcToken.token?.id) {
-      throw new Error("USDC token balance not found. Please make sure this wallet holds USDC before attempting a withdrawal.");
+    // 1. Fetch user's token balances to find the dynamic USDC tokenId registered by Circle
+    let tokenId = "";
+    try {
+      const balancesRes = await c.getWalletTokenBalance({
+        walletId: data.walletId,
+        userToken: data.userToken,
+      });
+      const tokenBalances = balancesRes.data?.tokenBalances ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const usdcToken = tokenBalances.find((tb: any) => tb.token?.symbol?.toUpperCase() === "USDC");
+      if (usdcToken?.token?.id) {
+        tokenId = usdcToken.token.id;
+      }
+    } catch (e) {
+      console.warn("[createWithdrawalTransaction] failed to fetch balances, using fallback address:", e);
     }
 
-    const tokenId = usdcToken.token.id;
-
-    // 2. Create the withdrawal transaction using the resolved tokenId
-    const res = await c.createTransaction({
+    const txParams: any = {
       userToken: data.userToken,
       idempotencyKey: crypto.randomUUID(),
       walletId: data.walletId,
       amounts: [String(data.amount)],
       destinationAddress: data.recipientAddress,
-      tokenId: tokenId,
       fee: {
         type: "level",
         config: {
           feeLevel: "LOW",
         },
       },
-    });
+    };
+
+    if (tokenId) {
+      txParams.tokenId = tokenId;
+    } else {
+      // Fallback: pass tokenAddress and blockchain
+      const blockchainParam = (CHAIN_NAME === "polygonAmoy" ? "MATIC-AMOY" : CHAIN_NAME) as any;
+      txParams.tokenAddress = USDC_ADDRESS;
+      txParams.blockchain = blockchainParam;
+    }
+
+    const res = await c.createTransaction(txParams);
     return { challengeId: res.data?.challengeId ?? null };
   });
