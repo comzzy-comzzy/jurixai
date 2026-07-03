@@ -160,19 +160,23 @@ export function AccountButton() {
               </button>
 
               <button
-                onClick={() => setStep("passkey")}
-                className="w-full flex items-center gap-3 rounded-xl border border-border p-3.5 text-left hover:border-input hover:bg-muted/50 transition-colors"
+                disabled
+                className="w-full flex items-center gap-3 rounded-xl border border-border p-3.5 text-left opacity-60 cursor-not-allowed"
               >
                 <span className="size-10 shrink-0 rounded-lg bg-accent/10 grid place-items-center text-accent">
                   <Fingerprint className="size-5" />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-semibold">Passkey</span>
+                  <span className="block text-sm font-semibold flex items-center gap-1.5">
+                    Passkey
+                    <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                      Coming Soon
+                    </span>
+                  </span>
                   <span className="block text-xs text-muted-foreground">
-                    Face ID or fingerprint on this device. Separate Circle passkey setup required.
+                    Face ID or fingerprint wallet login.
                   </span>
                 </span>
-                <ChevronRight className="size-4 text-muted-foreground shrink-0" />
               </button>
             </div>
           )}
