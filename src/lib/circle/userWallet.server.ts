@@ -10,6 +10,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
+import { USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
 
 const CHAIN = process.env.CIRCLE_CHAIN || "ARC-TESTNET";
 
@@ -119,12 +120,17 @@ export const createWithdrawalTransaction = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const c = client();
+    // Map blockchain parameter to TokenBlockchain type
+    const blockchainParam = (CHAIN_NAME === "polygonAmoy" ? "MATIC-AMOY" : CHAIN_NAME) as any;
+
     const res = await c.createTransaction({
       userToken: data.userToken,
       idempotencyKey: crypto.randomUUID(),
       walletId: data.walletId,
       amounts: [String(data.amount)],
       destinationAddress: data.recipientAddress,
+      tokenAddress: USDC_ADDRESS,
+      blockchain: blockchainParam,
       fee: {
         type: "level",
         config: {
