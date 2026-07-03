@@ -29,6 +29,8 @@ type SubmissionSignals = {
   hasGithub: boolean;
   hasDemo: boolean;
   hasVideo: boolean;
+  demoRequired: boolean;
+  videoRequired: boolean;
   entryPaid: boolean;
   hasDescription: boolean;
   repoAccessible: boolean;
@@ -89,7 +91,12 @@ function decodeHtml(value: string): string {
 }
 
 function stripHtml(value: string): string {
-  return decodeHtml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  return decodeHtml(
+    value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 }
 
 function parseGitHubRepo(url: string | null): { owner: string; repo: string } | null {
@@ -174,18 +181,12 @@ async function fetchTextDetailed(url: string): Promise<FetchResult<string>> {
   };
 }
 
-function parseRepoPageFallback(
-  html: string,
-  owner: string,
-  repo: string,
-): RepoPageFallback | null {
+function parseRepoPageFallback(html: string, owner: string, repo: string): RepoPageFallback | null {
   if (!html.trim()) return null;
 
   const repoPath = `/${owner}/${repo}/`;
   const branchMatches = [
-    ...html.matchAll(
-      new RegExp(`${repoPath}(?:blob|tree)/([^/"?#]+)/([^"?#]+)`, "g"),
-    ),
+    ...html.matchAll(new RegExp(`${repoPath}(?:blob|tree)/([^/"?#]+)/([^"?#]+)`, "g")),
   ];
   const branch = branchMatches[0]?.[1] ?? null;
   const rootFiles = unique(
@@ -292,7 +293,9 @@ async function loadRepoContext(githubUrl: string | null): Promise<RepoContext | 
       `Root entries: ${rootFileNames
         .slice(0, 8)
         .map((entry, index) =>
-          rootEntries?.[index]?.type ? `${entry} (${rootEntries[index]?.type ?? "unknown"})` : entry,
+          rootEntries?.[index]?.type
+            ? `${entry} (${rootEntries[index]?.type ?? "unknown"})`
+            : entry,
         )
         .join(", ")}`,
     );
@@ -376,7 +379,8 @@ function buildSubmissionSignals(
   const repoInaccessible = /private or inaccessible to anonymous fetches/.test(combinedRepo);
   const repoAccessible = Boolean(repoContext) && !repoInaccessible;
   const hasReadme = /readme present/.test(repoEvidence) || /readme excerpt:/.test(repoSummary);
-  const hasPackageJson = /package\.json present/.test(repoEvidence) || /package\.json excerpt:/.test(repoSummary);
+  const hasPackageJson =
+    /package\.json present/.test(repoEvidence) || /package\.json excerpt:/.test(repoSummary);
 
   const projectTokens = unique(
     projectName
@@ -393,13 +397,21 @@ function buildSubmissionSignals(
   const deliverablesMissing = hackathon.required_deliverables
     .filter((deliverable) => {
       const normalized = deliverable.toLowerCase();
+      if (normalized.includes("optional")) return false;
+      if (normalized.includes("video")) return !hasVideo || videoPlaceholder;
       if (normalized.includes("github") || normalized.includes("repo")) return !hasGithub;
       if (normalized.includes("demo")) return !hasDemo || demoPlaceholder;
-      if (normalized.includes("video")) return !hasVideo || videoPlaceholder;
       if (normalized.includes("readme")) return !hasReadme;
       return false;
     })
     .slice(0, 4);
+
+  const requiredDeliverablesText = hackathon.required_deliverables
+    .filter((item) => !item.toLowerCase().includes("optional"))
+    .join(" ")
+    .toLowerCase();
+  const demoRequired = requiredDeliverablesText.includes("demo");
+  const videoRequired = requiredDeliverablesText.includes("video");
 
   const criterionText = `${criterion.name} ${criterion.description ?? ""}`.toLowerCase();
   const commerceSignals = ["commerce", "checkout", "cart", "payment", "merchant", "store"];
@@ -407,7 +419,8 @@ function buildSubmissionSignals(
     (token) => brief.includes(token) || criterionText.includes(token),
   );
   const submissionShowsCommerce = commerceSignals.some(
-    (token) => description.includes(token) || projectName.includes(token) || combinedRepo.includes(token),
+    (token) =>
+      description.includes(token) || projectName.includes(token) || combinedRepo.includes(token),
   );
   const briefMismatch = briefCallsForCommerce && !submissionShowsCommerce;
 
@@ -415,6 +428,8 @@ function buildSubmissionSignals(
     hasGithub,
     hasDemo,
     hasVideo,
+    demoRequired,
+    videoRequired,
     entryPaid,
     hasDescription,
     repoAccessible,
@@ -438,7 +453,8 @@ function buildFallbackEvaluation(
   reason: string,
 ): AgentEvaluation {
   const signals = buildSubmissionSignals(criterion, hackathon, submission, repoContext);
-  const criterionText = `${criterion.name} ${criterion.description ?? ""} ${agent.focus_area}`.toLowerCase();
+  const criterionText =
+    `${criterion.name} ${criterion.description ?? ""} ${agent.focus_area}`.toLowerCase();
   let score = 6.4;
   let confidence = 0.64;
   const evidence: string[] = [];
@@ -467,7 +483,9 @@ function buildFallbackEvaluation(
   }
 
   if (signals.repoInaccessible) {
-    evidence.push("Public repo inspection failed because the linked GitHub repo is not anonymously accessible");
+    evidence.push(
+      "Public repo inspection failed because the linked GitHub repo is not anonymously accessible",
+    );
     flags.push("inaccessible_repo");
     score -= 2.1;
     confidence -= 0.16;
@@ -476,7 +494,7 @@ function buildFallbackEvaluation(
   if (signals.hasDemo) {
     evidence.push(`Demo link submitted: ${submission.demo_url}`);
     score += 0.3;
-  } else {
+  } else if (signals.demoRequired) {
     flags.push("missing_demo");
     score -= 1;
   }
@@ -489,7 +507,7 @@ function buildFallbackEvaluation(
   if (signals.hasVideo) {
     evidence.push(`Video link submitted: ${submission.video_url}`);
     score += 0.2;
-  } else {
+  } else if (signals.videoRequired) {
     flags.push("missing_video");
     score -= 0.85;
   }
@@ -519,7 +537,11 @@ function buildFallbackEvaluation(
     score -= 1.2;
   }
 
-  if (criterionText.includes("code") || criterionText.includes("engineering") || criterionText.includes("technical")) {
+  if (
+    criterionText.includes("code") ||
+    criterionText.includes("engineering") ||
+    criterionText.includes("technical")
+  ) {
     if (signals.repoInaccessible) score -= 0.9;
     if (signals.hasPackageJson) score += 0.45;
     if (signals.hasReadme) score += 0.25;
@@ -529,7 +551,7 @@ function buildFallbackEvaluation(
     criterionText.includes("ux") ||
     criterionText.includes("user")
   ) {
-    if (!signals.hasDemo || signals.demoPlaceholder) score -= 0.9;
+    if (!signals.hasDemo || signals.demoPlaceholder) score -= 0.6;
     if (!signals.hasDescription) score -= 0.6;
   } else if (
     criterionText.includes("innovation") ||
@@ -545,12 +567,14 @@ function buildFallbackEvaluation(
     criterionText.includes("shipping")
   ) {
     if (!signals.hasReadme) score -= 0.8;
-    if (!signals.hasVideo || signals.videoPlaceholder) score -= 0.8;
+    if (signals.videoRequired && (!signals.hasVideo || signals.videoPlaceholder)) score -= 0.8;
     if (signals.deliverablesMissing.length > 0) score -= 0.4;
   }
 
   if (evidence.length === 0) {
-    evidence.push("Scored from the submission record because no inspectable public repo evidence was available");
+    evidence.push(
+      "Scored from the submission record because no inspectable public repo evidence was available",
+    );
     flags.push("low_evidence");
     confidence -= 0.1;
   }
@@ -564,16 +588,14 @@ function buildFallbackEvaluation(
   }
 
   const rationaleParts = [
-    `This score is based on the submitted ${signals.hasGithub ? "repo link" : "project record"}, ${signals.hasDemo ? "demo link" : "missing demo"}, and ${signals.hasVideo ? "video evidence" : "missing video evidence"}.`,
+    `This score is based on the submitted ${signals.hasGithub ? "repo link" : "project record"}, ${signals.hasDemo ? "demo link" : signals.demoRequired ? "missing required demo" : "no demo link"}, and ${signals.hasVideo ? "video evidence" : signals.videoRequired ? "missing required video evidence" : "no video link"}.`,
     signals.repoInaccessible
       ? "The linked GitHub repository could not be inspected publicly, which reduced technical confidence."
       : null,
     signals.briefMismatch
       ? "The available materials do not clearly show alignment with the commerce-focused brief."
       : null,
-    signals.deliverablesMissing.length > 0
-      ? "Required deliverables were incomplete."
-      : null,
+    signals.deliverablesMissing.length > 0 ? "Required deliverables were incomplete." : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -586,7 +608,6 @@ function buildFallbackEvaluation(
     // project page (otherwise the fallback looks like a normal, generic score).
     finalFlags.push("fallback_scoring");
     finalEvidence.unshift(`model_error: ${reason}`.slice(0, 240));
-    // eslint-disable-next-line no-console
     console.error("[jurix judge] falling back to deterministic score:", reason);
   }
 
@@ -633,7 +654,7 @@ export async function probeJudgeModel(): Promise<{
     const res = await requestJudgeModel(endpoint, config.apiKey, {
       model: config.model,
       messages: [{ role: "user", content: "Reply with the single word OK." }],
-      max_tokens: 2000,
+      max_tokens: 4000,
     });
     return {
       configured: true,
@@ -672,6 +693,22 @@ function getJudgeModelConfig(): JudgeModelConfig {
 }
 
 function buildSystemPrompt(agent: JudgeAgent, criterion: JudgingCriterion): string {
+  const agentSlug = agent.slug.toLowerCase();
+  const criterionText = `${criterion.name} ${criterion.description ?? ""}`.toLowerCase();
+  const kaelInstructions =
+    agentSlug === "kael-02" ||
+    criterionText.includes("product") ||
+    criterionText.includes("ux") ||
+    criterionText.includes("user")
+      ? [
+          "Product-judge mode:",
+          "- Judge whether the submission clearly identifies a real problem, a real user, and a plausible end-to-end user flow.",
+          "- Do not reward generic AI-agent claims unless the submitted materials show what the agent actually does for a user.",
+          "- In the rationale, name the strongest product proof and the biggest product gap.",
+          "- If no demo is provided, say whether the repo/description still prove enough product completeness.",
+        ].join("\n")
+      : null;
+
   return [
     "You are an autonomous hackathon judge.",
     `Judge identity: ${agent.name} (${agent.role}).`,
@@ -684,22 +721,36 @@ function buildSystemPrompt(agent: JudgeAgent, criterion: JudgingCriterion): stri
     "Score only what is supported by the submission data you receive.",
     "Do not invent repo contents, demo behavior, users, metrics, or implementation details.",
     "You must consider whether the project followed the host brief, rules, and required deliverables.",
+    "Judge against the assigned criterion first, not against a generic overall impression.",
     "If the project appears off-brief or misses required deliverables, state that directly in the rationale and flags.",
+    "The rationale must mention at least one concrete submission or repo fact and explain how it affected this criterion score.",
     "Use a 1.00 to 10.00 score scale.",
     "Return exactly 5 lines and nothing else.",
     "Do not use markdown fences.",
     "Keep the rationale under 320 characters.",
     "Keep evidence entries short and concrete.",
+    kaelInstructions,
   ].join("\n");
 }
 
 function buildUserPrompt(
+  agent: JudgeAgent,
+  criterion: JudgingCriterion,
   hackathon: HackathonSummary,
   submission: SubmissionSummary,
   repoContext: RepoContext | null,
 ): string {
+  const criterionFocus = [
+    `Assigned judge: ${agent.name} (${agent.role})`,
+    `Assigned criterion: ${criterion.name}`,
+    `Criterion details: ${optional(criterion.description)}`,
+    `Criterion weight: ${criterion.weight_percent}%`,
+  ].join("\n");
+
   return [
     "Evaluate this submission against the assigned criterion.",
+    "",
+    criterionFocus,
     "",
     `Hackathon name: ${hackathon.name}`,
     `Hackathon brief: ${optional(hackathon.description)}`,
@@ -734,9 +785,11 @@ function buildUserPrompt(
     '- "score" must be between 1 and 10.',
     '- "confidence" must be between 0 and 1.',
     '- "rationale" must be specific to this project, criterion, and host brief, and 320 characters or fewer.',
+    '- "rationale" must explain the score using criterion-specific reasoning, not a generic summary.',
     '- "evidence" must contain at most 3 short observations from the provided hackathon, submission fields, and repo inspection only.',
     '- "flags" should contain short machine-readable labels such as missing_repo, missing_demo, off_brief, missing_deliverable, weak_docs, weak_repo_structure, weak_readme, low_evidence, entry_unpaid.',
     '- If there are no flags, write "FLAGS: none".',
+    "- A missing video is not a problem unless the host explicitly required a video deliverable.",
   ].join("\n");
 }
 
@@ -827,17 +880,13 @@ async function requestJudgeModel(
 
 function validateEvaluation(raw: string): AgentEvaluation {
   const text = stripReasoningPreamble(raw);
-  const fields = new Map<string, string>();
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z]+)\s*:\s*(.*)\s*$/);
-    if (match) fields.set(match[1], match[2]);
-  }
-
-  const score = clamp(Number(fields.get("SCORE")), 1, 10);
-  const confidence = clamp(Number(fields.get("CONFIDENCE")), 0, 1);
-  const rationale = fields.get("RATIONALE")?.trim() ?? "";
-  const evidence = normalizeStringArray(fields.get("EVIDENCE") ?? "");
-  const flagsRaw = fields.get("FLAGS")?.trim() ?? "";
+  const score = clamp(Number(text.match(/(?:^|\n)\s*SCORE\s*:\s*([^\n]+)/i)?.[1]), 1, 10);
+  const confidence = clamp(Number(text.match(/(?:^|\n)\s*CONFIDENCE\s*:\s*([^\n]+)/i)?.[1]), 0, 1);
+  const rationale = text.match(/(?:^|\n)\s*RATIONALE\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
+  const evidence = normalizeStringArray(
+    text.match(/(?:^|\n)\s*EVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "",
+  );
+  const flagsRaw = text.match(/(?:^|\n)\s*FLAGS\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
   const flags = !flagsRaw || /^none$/i.test(flagsRaw) ? [] : normalizeStringArray(flagsRaw);
 
   if (!Number.isFinite(score)) {
@@ -850,6 +899,10 @@ function validateEvaluation(raw: string): AgentEvaluation {
 
   if (!rationale) {
     throw new Error("Judge model returned an empty rationale.");
+  }
+
+  if (rationale.split(/\s+/).filter(Boolean).length < 8) {
+    throw new Error("Judge model returned a rationale that is too shallow.");
   }
 
   return {
@@ -885,12 +938,15 @@ export async function evaluateSubmissionWithModel(
             model: config.model,
             messages: [
               { role: "system", content: buildSystemPrompt(agent, criterion) },
-              { role: "user", content: buildUserPrompt(hackathon, submission, repoContext) },
+              {
+                role: "user",
+                content: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
+              },
             ],
             temperature: 0.2,
-            // Reasoning models (GLM 5.1) spend tokens "thinking" before the
-            // answer — 420 was far too small, so content came back null. Give it
-            // room to finish thinking AND write the 5-line verdict.
+            // Keep the smoke test and production path aligned: reasoning models
+            // need enough output budget to finish their internal reasoning and
+            // still emit the required 5-line verdict.
             max_tokens: 4000,
           },
         ]
@@ -907,7 +963,7 @@ export async function evaluateSubmissionWithModel(
                 content: [
                   {
                     type: "input_text",
-                    text: buildUserPrompt(hackathon, submission, repoContext),
+                    text: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
                   },
                 ],
               },
@@ -951,7 +1007,7 @@ export async function evaluateSubmissionWithModel(
                 content: [
                   {
                     type: "input_text",
-                    text: buildUserPrompt(hackathon, submission, repoContext),
+                    text: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
                   },
                 ],
               },
@@ -997,7 +1053,9 @@ export async function evaluateSubmissionWithModel(
             evidence: Array.isArray(parsed.evidence)
               ? parsed.evidence.map(String).filter(Boolean).slice(0, 6)
               : [],
-            flags: Array.isArray(parsed.flags) ? parsed.flags.map(String).filter(Boolean).slice(0, 6) : [],
+            flags: Array.isArray(parsed.flags)
+              ? parsed.flags.map(String).filter(Boolean).slice(0, 6)
+              : [],
           };
         }
       } catch {

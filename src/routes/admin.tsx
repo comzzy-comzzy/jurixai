@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -138,31 +139,40 @@ function Admin() {
                     <TreasuryCell hackathon={hackathon} />
                   </td>
                   <td className="p-3 text-right">
-                    <button
-                      type="button"
-                      disabled={busyId === hackathon.id}
-                      onClick={async () => {
-                        setBusyId(hackathon.id);
-                        setActionMessage(null);
-                        try {
-                          const result = await triggerHackathonJudging({
-                            data: { hackathon_id: hackathon.id, triggered_by: "admin" },
-                          });
-                          setActionMessage(
-                            `Judging started for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows.`,
-                          );
-                        } catch (error) {
-                          setActionMessage(
-                            error instanceof Error ? error.message : "Failed to trigger judging.",
-                          );
-                        } finally {
-                          setBusyId(null);
-                        }
-                      }}
-                      className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
-                    >
-                      {busyId === hackathon.id ? "Running…" : "Run judging"}
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <Link
+                        to="/hackathons/$id"
+                        params={{ id: hackathon.id }}
+                        className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors"
+                      >
+                        View entries
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={busyId === hackathon.id}
+                        onClick={async () => {
+                          setBusyId(hackathon.id);
+                          setActionMessage(null);
+                          try {
+                            const result = await triggerHackathonJudging({
+                              data: { hackathon_id: hackathon.id, triggered_by: "admin" },
+                            });
+                            setActionMessage(
+                              `Judging started for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows.`,
+                            );
+                          } catch (error) {
+                            setActionMessage(
+                              error instanceof Error ? error.message : "Failed to trigger judging.",
+                            );
+                          } finally {
+                            setBusyId(null);
+                          }
+                        }}
+                        className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+                      >
+                        {busyId === hackathon.id ? "Running…" : "Run judging"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

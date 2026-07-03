@@ -59,10 +59,15 @@ function CreateHackathon() {
     organizerEmail: "",
     description: "",
     submissionInstructions: "",
-    requiredDeliverables: ["GitHub repository", "Live demo URL", "Demo video URL"],
+    requiredDeliverables: [
+      "GitHub repository",
+      "Problem solved and target users",
+      "How to run or test the agent",
+      "Optional live demo or walkthrough video",
+    ],
     startDate: "",
     deadline: "",
-    prizePoolUsdc: "25000",
+    prizePoolUsdc: "50",
     winnerSplit: ["50", "30", "20"],
   });
 
@@ -345,7 +350,9 @@ function CreateHackathon() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Required deliverables</span>
-              <span className="font-medium">{form.requiredDeliverables.filter(Boolean).length} listed</span>
+              <span className="font-medium">
+                {form.requiredDeliverables.filter(Boolean).length} listed
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Weight total</span>

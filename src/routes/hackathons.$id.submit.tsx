@@ -110,10 +110,9 @@ function SubmitProject() {
           type="url"
         />
         <Field
-          label="Video demo URL"
+          label="Video demo URL (optional)"
           value={form.videoUrl}
           onChange={(value) => setForm({ ...form, videoUrl: value })}
-          required
           type="url"
         />
         <Field
