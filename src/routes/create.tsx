@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createHackathon, loadHomeData } from "@/lib/jurix/actions.server";
+import { useWallet } from "@/lib/circle/useWallet";
 
 export const Route = createFileRoute("/create")({
   loader: () => loadHomeData(),
@@ -48,6 +49,7 @@ function buildHackathonDescription(
 }
 
 function CreateHackathon() {
+  const { wallet, profile } = useWallet();
   const navigate = useNavigate();
   const { active_agents } = Route.useLoaderData();
   const [step, setStep] = useState(0);
@@ -70,6 +72,16 @@ function CreateHackathon() {
     prizePoolUsdc: "50",
     winnerSplit: ["50", "30", "20"],
   });
+
+  useEffect(() => {
+    if (wallet && !form.organizerEmail) {
+      setForm((prev) => ({
+        ...prev,
+        organizerEmail: wallet.identifier,
+        organizerName: prev.organizerName || profile?.displayName || "",
+      }));
+    }
+  }, [wallet, profile, form.organizerEmail]);
 
   const defaultAgents = active_agents.slice(0, 4);
   const [criteria, setCriteria] = useState<Criterion[]>(
@@ -131,6 +143,27 @@ function CreateHackathon() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!wallet) {
+    return (
+      <div className="max-w-md mx-auto px-6 py-20 text-center">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Sign in required</h1>
+          <p className="text-sm text-muted-foreground mt-3 mb-6">
+            You must create an account or log in to host a hackathon on JuriXAI.
+          </p>
+          <div className="flex flex-col gap-2.5">
+            <Link
+              to="/"
+              className="w-full inline-flex justify-center items-center rounded-lg bg-accent text-accent-foreground px-5 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+            >
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
