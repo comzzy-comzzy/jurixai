@@ -336,10 +336,17 @@ function BalanceCard({
     try {
       const { executeWithdrawal } = await import("@/lib/circle/userWallet");
       await executeWithdrawal(email, recipient.trim(), val);
-      toast.success("Withdrawal successful!", { description: `Successfully transferred ${val} USDC to ${recipient.trim()}` });
+      toast.success("Withdrawal initiated!", { 
+        description: `Successfully sent ${val} USDC to ${recipient.trim()}. Balance will update once confirmed on-chain.`,
+        duration: 6000 
+      });
       setIsOpen(false);
       setAmount("");
-      void load();
+      
+      // Wait 4 seconds for the transaction to be mined on Arc Testnet before reloading balance
+      setTimeout(() => {
+        void load();
+      }, 4000);
     } catch (err) {
       toast.error("Withdrawal failed", { description: err instanceof Error ? err.message : "An error occurred." });
     } finally {
