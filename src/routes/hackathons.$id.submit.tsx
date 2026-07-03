@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallet } from "@/lib/circle/useWallet";
 import { createSubmission, loadHackathonDetail } from "@/lib/jurix/actions.server";
 
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/hackathons/$id/submit")({
 function SubmitProject() {
   const hackathon = Route.useLoaderData();
   const navigate = useNavigate();
-  const { wallet } = useWallet();
+  const { wallet, profile } = useWallet();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -35,6 +35,15 @@ function SubmitProject() {
     videoUrl: "",
     payoutAddress: "",
   });
+
+  useEffect(() => {
+    if (wallet && !form.payoutAddress) {
+      setForm((prev) => ({
+        ...prev,
+        payoutAddress: profile?.payoutEvmAddress || wallet.address || "",
+      }));
+    }
+  }, [wallet, profile, form.payoutAddress]);
 
   if (!wallet) {
     return (
