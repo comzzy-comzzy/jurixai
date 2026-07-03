@@ -307,7 +307,7 @@ function ProjectDetail() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-sm font-semibold text-foreground">
-              How this became {project.weighted_score.toFixed(1)}%
+              Weighted Score Breakdown ({project.weighted_score.toFixed(1)}%)
             </h2>
             <div className="h-px flex-1 bg-border" />
           </div>
