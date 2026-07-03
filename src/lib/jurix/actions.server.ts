@@ -57,6 +57,11 @@ export const createHackathon = createServerFn({ method: "POST" })
   .validator((data: CreateHackathonInput) => data)
   .handler(async ({ data }) => {
     ensureConfigured();
+    const session = await getWalletSession();
+    const userId = session?.profile?.userId;
+    if (!userId) {
+      throw new Error("You must sign in or create an account to host a hackathon.");
+    }
     const supabase = getSupabaseServerClient();
 
     const id = slugify(data.name);
@@ -75,6 +80,7 @@ export const createHackathon = createServerFn({ method: "POST" })
         deadline: data.deadline,
         status: "open",
         winner_split: winnerSplit,
+        host_user_id: userId,
       })
       .select("id")
       .single();
@@ -177,6 +183,48 @@ export const loadJoinedSubmissions = createServerFn({ method: "GET" }).handler(a
   if (error) throw new Error(error.message);
 
   return registrations;
+});
+
+export const loadHostedHackathons = createServerFn({ method: "GET" }).handler(async () => {
+  ensureConfigured();
+  const session = await getWalletSession();
+  const userId = session?.profile?.userId;
+  if (!userId) {
+    return [];
+  }
+
+  const supabase = getSupabaseServerClient();
+  const { data: hackathons, error } = await supabase
+    .from("hackathons")
+    .select(`
+      id,
+      name,
+      status,
+      deadline,
+      prize_pool_usdc,
+      created_at,
+      registrations(count)
+    `)
+    .eq("host_user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (hackathons ?? []).map((row) => {
+    const registrations = row.registrations as unknown;
+    const submissionCount = Array.isArray(registrations)
+      ? Number((registrations[0] as { count?: number } | undefined)?.count ?? 0)
+      : 0;
+    return {
+      id: String(row.id),
+      name: String(row.name),
+      status: String(row.status),
+      deadline: row.deadline ? String(row.deadline) : null,
+      prize_pool_usdc: Number(row.prize_pool_usdc ?? 0),
+      created_at: String(row.created_at),
+      submission_count: submissionCount,
+    };
+  });
 });
 
 export const updateSubmission = createServerFn({ method: "POST" })

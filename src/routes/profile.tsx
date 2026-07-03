@@ -1,13 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownToLine, ArrowUpRight, Copy, RefreshCw, Wallet, Edit3, Github, ExternalLink, Video } from "lucide-react";
+import { ArrowDownToLine, ArrowUpRight, Copy, RefreshCw, Wallet, Edit3, Github, ExternalLink, Video, Plus, Users } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWallet } from "@/lib/circle/useWallet";
 import { readUsdcBalance, explorerAddr } from "@/lib/chain";
 import { truncateAddr } from "@/lib/format";
-import { loadJoinedSubmissions, updateSubmission } from "@/lib/jurix/actions.server";
+import {
+  loadHostedHackathons,
+  loadJoinedSubmissions,
+  updateSubmission,
+} from "@/lib/jurix/actions.server";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title: "Dashboard — JuriXAI" }] }),
@@ -25,6 +29,8 @@ function ProfileRoute() {
 
   const [joinedSubmissions, setJoinedSubmissions] = useState<any[]>([]);
   const [loadingJoined, setLoadingJoined] = useState(false);
+  const [hostedHackathons, setHostedHackathons] = useState<any[]>([]);
+  const [loadingHosted, setLoadingHosted] = useState(false);
 
   const fetchJoined = useCallback(async () => {
     if (!wallet) return;
@@ -39,9 +45,23 @@ function ProfileRoute() {
     }
   }, [wallet]);
 
+  const fetchHosted = useCallback(async () => {
+    if (!wallet) return;
+    setLoadingHosted(true);
+    try {
+      const data = await loadHostedHackathons();
+      setHostedHackathons(data);
+    } catch (e) {
+      console.error("Failed to load hosted hackathons:", e);
+    } finally {
+      setLoadingHosted(false);
+    }
+  }, [wallet]);
+
   useEffect(() => {
     fetchJoined();
-  }, [fetchJoined]);
+    fetchHosted();
+  }, [fetchJoined, fetchHosted]);
 
   useEffect(() => {
     setDisplayName(profile?.displayName ?? "");
@@ -92,6 +112,13 @@ function ProfileRoute() {
 
       {/* Balance — the hero card */}
       <BalanceCard address={wallet.address} />
+
+      {/* Hackathons you host */}
+      <HostedHackathonsList
+        hackathons={hostedHackathons}
+        loading={loadingHosted}
+        onRefresh={fetchHosted}
+      />
 
       {/* Joined Hackathons List */}
       <JoinedHackathonsList
@@ -511,6 +538,100 @@ function EditSubmissionDialog({ submission, open, onOpenChange, onSaved }: EditS
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function HostedHackathonsList({
+  hackathons,
+  loading,
+  onRefresh,
+}: {
+  hackathons: any[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const statusStyle = (status: string) =>
+    status === "open"
+      ? "bg-emerald-500/10 text-emerald-400"
+      : status === "judging"
+        ? "bg-ai/10 text-ai"
+        : "bg-muted text-muted-foreground";
+
+  return (
+    <div className="mt-10 rounded-2xl border border-border bg-card p-7 shadow-sm">
+      <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Hackathons you host</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Events created from this account. Only you can run judging on them.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-input hover:text-foreground transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </button>
+          <Link
+            to="/create"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground shadow-sm hover:opacity-90 transition-opacity"
+          >
+            <Plus className="size-3.5" /> Host new
+          </Link>
+        </div>
+      </div>
+
+      {loading && hackathons.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          Loading your hackathons...
+        </div>
+      ) : hackathons.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground text-sm">
+          <p className="mb-4">You haven't hosted a hackathon yet.</p>
+          <Link
+            to="/create"
+            className="inline-flex rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-accent-foreground shadow-sm hover:opacity-90 transition-opacity"
+          >
+            Host a Hackathon
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {hackathons.map((h) => (
+            <Link
+              key={h.id}
+              to="/hackathons/$id"
+              params={{ id: h.id }}
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/30 p-5 transition hover:border-border/80 hover:shadow-sm"
+            >
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-bold tracking-tight text-foreground">
+                  {h.name}
+                </h3>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="size-3" />
+                    {h.submission_count} submission{h.submission_count === 1 ? "" : "s"}
+                  </span>
+                  <span className="font-mono">
+                    {Number(h.prize_pool_usdc).toLocaleString("en-US")} USDC
+                  </span>
+                </div>
+              </div>
+              <span
+                className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(
+                  h.status,
+                )}`}
+              >
+                {h.status}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
