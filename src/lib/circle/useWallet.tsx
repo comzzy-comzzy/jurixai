@@ -20,7 +20,7 @@ interface WalletContextValue {
   profileBusy: boolean;
   signUp: (username: string) => Promise<void>;
   logIn: (username: string) => Promise<void>;
-  loginEmail: (email: string) => Promise<void>;
+  loginEmail: (email: string, onStatusUpdate?: (status: string) => void) => Promise<void>;
   saveProfile: (input: SaveAccountProfileInput) => Promise<void>;
   refreshProfile: () => Promise<void>;
   signOut: () => void;
@@ -106,9 +106,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback((username: string) => run(() => createWallet(username)), [run]);
   const logIn = useCallback((username: string) => run(() => loginWallet(username)), [run]);
   const loginEmail = useCallback(
-    (email: string) =>
+    (email: string, onStatusUpdate?: (status: string) => void) =>
       run(async () => {
-        return emailSignIn(email);
+        return emailSignIn(email, onStatusUpdate);
       }),
     [run],
   );

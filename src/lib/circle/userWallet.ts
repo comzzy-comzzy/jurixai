@@ -79,7 +79,10 @@ async function waitForWalletAddress(userToken: string, tries = 30): Promise<stri
  * return the wallet. A single SDK instance handles both the OTP and the PIN
  * challenge.
  */
-export async function emailSignIn(email: string): Promise<CircleWallet> {
+export async function emailSignIn(
+  email: string,
+  onStatusUpdate?: (status: string) => void
+): Promise<CircleWallet> {
   if (!APP_ID) throw new Error("Circle App ID is missing (VITE_CIRCLE_APP_ID).");
   await ensureBrowserGlobals();
   const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
@@ -108,6 +111,7 @@ export async function emailSignIn(email: string): Promise<CircleWallet> {
   );
 
   const deviceId = await sdk.getDeviceId();
+  onStatusUpdate?.("sending_otp");
   const tok = await emailLoginStart({ data: { email, deviceId } });
   sdk.updateConfigs({
     appSettings: { appId: APP_ID },
@@ -117,20 +121,26 @@ export async function emailSignIn(email: string): Promise<CircleWallet> {
       otpToken: tok.otpToken,
     },
   });
+  
+  onStatusUpdate?.("awaiting_otp");
   sdk.verifyOtp();
 
   const session = await loginDone;
 
+  onStatusUpdate?.("verifying_wallet");
   // 2) Get the wallet. First-time users have none → run the "set PIN + create
   //    wallet" ceremony on the SAME sdk instance, then poll for the address.
   const prov = await provisionWallet({ data: { userToken: session.userToken, email } });
   let address = prov.address ?? "";
   if (!address && prov.challengeId) {
+    onStatusUpdate?.("awaiting_pin");
     sdk.setAuthentication({
       userToken: session.userToken,
       encryptionKey: session.encryptionKey,
     });
     await runChallenge(sdk, prov.challengeId);
+    
+    onStatusUpdate?.("polling_address");
     address = await waitForWalletAddress(session.userToken);
   }
 

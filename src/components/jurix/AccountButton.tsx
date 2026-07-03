@@ -197,9 +197,19 @@ export function AccountButton() {
                 disabled={busy || !email.trim() || !configured || serverReady === null}
                 onClick={async () => {
                   setOpen(false);
-                  const tid = toast.loading("Connecting your account...");
+                  const tid = toast.loading("Sending verification email...");
                   try {
-                    await loginEmail(email.trim());
+                    await loginEmail(email.trim(), (status: string) => {
+                      if (status === "awaiting_otp") {
+                        toast.loading("Email sent! Enter the verification code in the popup...", { id: tid });
+                      } else if (status === "verifying_wallet") {
+                        toast.loading("Connecting wallet session...", { id: tid });
+                      } else if (status === "awaiting_pin") {
+                        toast.loading("Create your wallet security PIN in the popup...", { id: tid });
+                      } else if (status === "polling_address") {
+                        toast.loading("Deploying smart wallet on-chain (please wait, up to 20s)...", { id: tid });
+                      }
+                    });
                     toast.success("Wallet ready", {
                       id: tid,
                       description: "Your Circle wallet is connected.",
