@@ -5,7 +5,7 @@ import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons, f
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
 import { requireAdmin } from "@/lib/admin/guard.server";
-import { sendUsdc } from "@/lib/chain";
+import { sendUsdc, readUsdcBalance } from "@/lib/chain";
 
 type HackathonCriterionInput = {
   name: string;
@@ -365,6 +365,25 @@ export const disburseHackathonPrizes = createServerFn({ method: "POST" })
     if (!hackathon) throw new Error("Hackathon not found.");
     if (hackathon.status !== "closed") {
       throw new Error("Hackathon must be closed/judged to disburse rewards.");
+    }
+
+    // 1.5. Verify the treasury has been funded by the hoster
+    if (!hackathon.treasury_address) {
+      throw new Error("Treasury wallet has not been configured for this hackathon.");
+    }
+
+    const durationDays = hackathon.start_date && hackathon.deadline
+      ? Math.ceil((new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
+    const adminFee = 1000 + (extraMonths * 100);
+    const totalFunding = hackathon.prize_pool_usdc + adminFee;
+
+    const treasuryBalance = await readUsdcBalance(hackathon.treasury_address);
+    if (treasuryBalance < totalFunding) {
+      throw new Error(
+        `Treasury underfunded. Live balance is ${treasuryBalance} USDC, but total required is ${totalFunding} USDC. Hoster must fund the treasury wallet first.`
+      );
     }
 
     const submissions = hackathon.submissions ?? [];
