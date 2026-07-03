@@ -187,17 +187,23 @@ export function AccountButton() {
               <button
                 disabled={busy || !email.trim() || !configured || serverReady === null}
                 onClick={async () => {
+                  setOpen(false);
+                  const tid = toast.loading("Requesting code from Circle...");
                   try {
                     await loginEmail(email.trim());
-                    setOpen(false);
                     toast.success("Wallet ready", {
+                      id: tid,
                       description: "Your Circle wallet is connected.",
                     });
-                  } catch {
-                    /* error shown inline */
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : "Email login failed";
+                    toast.error("Login failed", {
+                      id: tid,
+                      description: msg,
+                    });
                   }
                 }}
-                className="w-full rounded-lg bg-accent text-accent-foreground px-4 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="w-full rounded-lg bg-accent text-accent-foreground px-4 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
               >
                 {busy
                   ? "Sending code…"
