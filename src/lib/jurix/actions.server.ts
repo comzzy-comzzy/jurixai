@@ -5,7 +5,8 @@ import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons, f
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
 import { requireAdmin } from "@/lib/admin/guard.server";
-import { sendUsdc, readUsdcBalance } from "@/lib/chain";
+import { readUsdcBalance } from "@/lib/chain";
+import { sendUsdc } from "@/lib/chain.server";
 
 type HackathonCriterionInput = {
   name: string;

@@ -11,7 +11,7 @@ import {
   type AgentEvaluation,
 } from "@/lib/jurix/judge-model.server";
 import { getHackathonDetail, listHackathons } from "./data.server";
-import { sendUsdc } from "@/lib/chain";
+import { sendUsdc } from "@/lib/chain.server";
 
 // Simple Promise chain to serialize txs and prevent nonce conflicts
 let agentPaymentQueue = Promise.resolve();
