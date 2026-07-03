@@ -8,7 +8,6 @@ import logoUrl from "@/assets/jurixai-logo.png";
 const NAV = [
   { to: "/hackathons", label: "Browse" },
   { to: "/create", label: "Host" },
-  { to: "/admin", label: "Admin" },
   { to: "/profile", label: "Dashboard" },
 ] as const;
 
