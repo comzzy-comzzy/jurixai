@@ -14,8 +14,8 @@
 import util from "util/";
 
 const g = globalThis as unknown as {
-  TextEncoder: typeof TextEncoder;
-  TextDecoder: typeof TextDecoder;
+  TextEncoder: typeof globalThis.TextEncoder;
+  TextDecoder: typeof globalThis.TextDecoder;
 };
 
 const base = (util ?? {}) as Record<string, unknown>;
@@ -35,5 +35,5 @@ export const format = base.format as unknown;
 export const promisify = base.promisify as unknown;
 export const types = base.types as unknown;
 export const deprecate = base.deprecate as unknown;
-export const TextEncoder = g.TextEncoder;
-export const TextDecoder = g.TextDecoder;
+export const TextEncoder = g.TextEncoder as typeof globalThis.TextEncoder;
+export const TextDecoder = g.TextDecoder as typeof globalThis.TextDecoder;

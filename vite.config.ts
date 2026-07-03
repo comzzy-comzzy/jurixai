@@ -67,7 +67,7 @@ export default defineConfig({
   // timeout is far too short, so runs got killed mid-way and stuck on "judging".
   // 300s is the Vercel Pro ceiling. (Nitro writes this into the function's
   // .vc-config.json.)
-  nitro: { preset: "vercel", vercel: { functions: { maxDuration: 300 } } },
+  nitro: { preset: "vercel", vercel: { functions: { maxDuration: 300 } } } as any,
   vite: {
     plugins: [clientNodePolyfills()],
     // Dev only: don't esbuild-prebundle Circle's SDK, so its Node-builtin imports go

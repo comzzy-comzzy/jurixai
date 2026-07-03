@@ -14,6 +14,7 @@ export interface JudgeAgent {
   weight_percent: number;
   system_prompt: string | null;
   scoring_notes: string | null;
+  wallet_address: string | null;
   created_at: string;
 }
 
@@ -59,6 +60,8 @@ export interface SubmissionScore {
   rationale: string | null;
   evidence: string[] | null;
   flags: string[] | null;
+  tx_hash?: string | null;
+  payment_status?: string | null;
   created_at: string;
 }
 

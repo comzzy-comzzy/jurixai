@@ -5,6 +5,7 @@ import { JudgeActivityFeed } from "@/components/jurix/JudgeActivityFeed";
 import { ScoreBar } from "@/components/jurix/ScoreBar";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { loadSubmissionDetail } from "@/lib/jurix/actions.server";
+import { explorerTx } from "@/lib/chain";
 
 export const Route = createFileRoute("/hackathons/$id/project/$projectId")({
   loader: async ({ params }) => {
@@ -332,6 +333,35 @@ function ProjectDetail() {
                   <p className="mt-2 text-xs leading-relaxed">
                     {score?.rationale ?? "No rationale recorded yet."}
                   </p>
+                  {agent?.wallet_address && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2.5 text-[11px] font-mono">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        Agent Wallet: <WalletAddress address={agent.wallet_address} />
+                      </span>
+                      {score?.tx_hash ? (
+                        <a
+                          href={explorerTx(score.tx_hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-accent flex items-center gap-1 font-bold hover:underline"
+                        >
+                          ✓ Fee Paid: 0.001 USDC <ArrowUpRight className="size-3" />
+                        </a>
+                      ) : score?.payment_status === "pending" ? (
+                        <span className="text-warn flex items-center gap-1 font-bold animate-pulse">
+                          ⋯ Fee Pending: 0.001 USDC
+                        </span>
+                      ) : score?.payment_status === "failed" ? (
+                        <span className="text-warn flex items-center gap-1 font-bold">
+                          ✗ Fee Failed: 0.001 USDC
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground flex items-center gap-1 font-semibold">
+                          ✗ Fee Unpaid: 0.001 USDC
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -41,7 +41,7 @@ async function ensureBrowserGlobals(): Promise<void> {
     g.Buffer = Buffer;
   }
   if (!g.process) {
-    const proc = (await import("process/browser")) as { default?: unknown };
+    const proc = (await import("process/browser" as any)) as { default?: unknown };
     g.process = proc.default ?? proc;
   }
 }

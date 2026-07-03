@@ -24,6 +24,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     weight_percent: 35,
     system_prompt: null,
     scoring_notes: null,
+    wallet_address: null,
     created_at: new Date(0).toISOString(),
   },
   {
@@ -38,6 +39,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     weight_percent: 25,
     system_prompt: null,
     scoring_notes: null,
+    wallet_address: null,
     created_at: new Date(0).toISOString(),
   },
   {
@@ -52,6 +54,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     weight_percent: 20,
     system_prompt: null,
     scoring_notes: null,
+    wallet_address: null,
     created_at: new Date(0).toISOString(),
   },
   {
@@ -66,6 +69,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     weight_percent: 20,
     system_prompt: null,
     scoring_notes: null,
+    wallet_address: null,
     created_at: new Date(0).toISOString(),
   },
 ];
@@ -166,6 +170,7 @@ function normalizeAgent(row: Record<string, unknown>): JudgeAgent {
     weight_percent: toNumber(row.weight_percent),
     system_prompt: row.system_prompt ? String(row.system_prompt) : null,
     scoring_notes: row.scoring_notes ? String(row.scoring_notes) : null,
+    wallet_address: row.wallet_address ? String(row.wallet_address) : null,
     created_at: String(row.created_at),
   };
 }
@@ -464,37 +469,58 @@ export async function getSubmissionDetail(
   if (!detail) return null;
 
   const supabase = getSupabaseServerClient();
-  const [{ data: submission, error: submissionError }, { data: scores, error: scoresError }] =
-    await Promise.all([
-      supabase
-        .from("registrations")
-        .select("*")
-        .eq("hackathon_id", hackathonId)
-        .eq("id", submissionId)
-        .maybeSingle(),
-      supabase
-        .from("submission_scores")
-        .select("*, criterion:judging_criteria(weight_percent)")
-        .eq("registration_id", submissionId)
-        .order("created_at", { ascending: true }),
-    ]);
+  const [
+    { data: submission, error: submissionError },
+    { data: scores, error: scoresError },
+    { data: payments, error: paymentsError }
+  ] = await Promise.all([
+    supabase
+      .from("registrations")
+      .select("*")
+      .eq("hackathon_id", hackathonId)
+      .eq("id", submissionId)
+      .maybeSingle(),
+    supabase
+      .from("submission_scores")
+      .select("*, criterion:judging_criteria(weight_percent)")
+      .eq("registration_id", submissionId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("payments")
+      .select("*")
+      .eq("registration_id", submissionId)
+      .eq("kind", "payout"),
+  ]);
 
   if (submissionError) throw new Error(submissionError.message);
   if (scoresError) throw new Error(scoresError.message);
+  if (paymentsError) throw new Error(paymentsError.message);
   if (!submission) return null;
 
   const weighted = await fetchWeightedScores([submissionId]);
+  const { criteria: _c, agents: _a, submissions: _s, ...hackathonSummary } = detail;
+
+  // Map each score to its matching payment (by agent's wallet address)
+  const normalizedScores = (scores ?? []).map((row) => {
+    const score = normalizeScore(row as Record<string, unknown>);
+    const agent = detail.agents.find((a) => a.id === score.agent_id);
+    if (agent && agent.wallet_address) {
+      const match = (payments ?? []).find(
+        (p) => String(p.to_address).toLowerCase() === String(agent.wallet_address).toLowerCase()
+      );
+      if (match) {
+        score.tx_hash = match.circle_tx_id || null;
+        score.payment_status = match.status || null;
+      }
+    }
+    return score;
+  });
 
   return {
     ...normalizeSubmission(submission as Record<string, unknown>, weighted.get(submissionId) ?? 0),
-    hackathon: {
-      ...detail,
-      criteria: undefined as never,
-      agents: undefined as never,
-      submissions: undefined as never,
-    },
+    hackathon: hackathonSummary,
     criteria: detail.criteria,
     agents: detail.agents,
-    scores: (scores ?? []).map((row) => normalizeScore(row as Record<string, unknown>)),
+    scores: normalizedScores,
   };
 }

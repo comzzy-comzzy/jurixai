@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { spawnSync } from "node:child_process";
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -95,17 +96,13 @@ function normalizeStringArray(value) {
 
 function extractEvaluation(text) {
   const cleaned = String(text).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  const fields = new Map();
-  for (const line of cleaned.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z]+)\s*:\s*(.*)\s*$/);
-    if (match) fields.set(match[1], match[2]);
-  }
-
-  const score = Number(fields.get("SCORE"));
-  const confidence = Number(fields.get("CONFIDENCE"));
-  const rationale = String(fields.get("RATIONALE") ?? "").trim();
-  const evidence = normalizeStringArray(fields.get("EVIDENCE") ?? "");
-  const flagsRaw = String(fields.get("FLAGS") ?? "").trim();
+  const score = Number(cleaned.match(/(?:^|\n)\s*SCORE\s*:\s*([^\n]+)/i)?.[1]);
+  const confidence = Number(cleaned.match(/(?:^|\n)\s*CONFIDENCE\s*:\s*([^\n]+)/i)?.[1]);
+  const rationale = String(cleaned.match(/(?:^|\n)\s*RATIONALE\s*:\s*([^\n]+)/i)?.[1] ?? "").trim();
+  const evidence = normalizeStringArray(
+    cleaned.match(/(?:^|\n)\s*EVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "",
+  );
+  const flagsRaw = String(cleaned.match(/(?:^|\n)\s*FLAGS\s*:\s*([^\n]+)/i)?.[1] ?? "").trim();
   const flags =
     !flagsRaw || /^none$/i.test(flagsRaw)
       ? []
@@ -116,6 +113,41 @@ function extractEvaluation(text) {
   }
 
   return { score, confidence, rationale, evidence, flags };
+}
+
+function extractTextFromUnknown(value) {
+  if (typeof value === "string") return value.trim();
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractTextFromUnknown(item))
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (typeof value === "object") {
+    const record = value;
+    return [
+      extractTextFromUnknown(record.output_text),
+      extractTextFromUnknown(record.text),
+      extractTextFromUnknown(record.content),
+      extractTextFromUnknown(record.message),
+      extractTextFromUnknown(record.reasoning),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  return "";
+}
+
+function extractChoiceText(choice) {
+  if (!choice || typeof choice !== "object") return "";
+  return (
+    extractTextFromUnknown(choice.message) ||
+    extractTextFromUnknown(choice.delta) ||
+    extractTextFromUnknown(choice)
+  );
 }
 
 async function evaluate(agent, criterion, submission) {
@@ -129,7 +161,9 @@ async function evaluate(agent, criterion, submission) {
             { role: "user", content: buildUserPrompt(submission) },
           ],
           temperature: 0.2,
-          max_tokens: 420,
+          // Reasoning models can spend a lot of output budget before they emit
+          // the final 5-line verdict. Keep the smoke test aligned with prod.
+          max_tokens: 4000,
         }
       : {
           model: config.model,
@@ -178,20 +212,12 @@ async function evaluate(agent, criterion, submission) {
         ? `${config.baseUrl.replace(/\/$/, "")}/text/chatcompletion_v2`
         : `${config.baseUrl.replace(/\/$/, "")}/responses`;
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Judge request failed ${response.status}: ${await response.text()}`);
+  const { status, responseBody } = requestJudgeModel(endpoint, config.apiKey, body);
+  if (!(status >= 200 && status < 300)) {
+    throw new Error(`Judge request failed ${status}: ${responseBody.slice(0, 400)}`);
   }
 
-  const payload = await response.json();
+  const payload = responseBody ? JSON.parse(responseBody) : {};
   if (config.provider === "openai") {
     const parsed = payload?.output?.[0]?.content?.[0]?.text ?? payload?.output_text ?? "";
     const value = parsed ? JSON.parse(parsed) : null;
@@ -205,14 +231,46 @@ async function evaluate(agent, criterion, submission) {
     };
   }
 
-  const content = payload?.choices?.[0]?.message?.content;
   const raw =
-    typeof content === "string"
-      ? content
-      : Array.isArray(content)
-        ? content.map((item) => item?.text ?? "").join("\n")
-        : payload?.reply ?? "";
+    extractTextFromUnknown(payload.output_text) ||
+    extractTextFromUnknown(payload.reply) ||
+    extractTextFromUnknown(payload.text) ||
+    extractChoiceText(Array.isArray(payload.choices) ? payload.choices[0] : null) ||
+    extractTextFromUnknown(payload.output?.[0]) ||
+    extractTextFromUnknown(payload);
   return extractEvaluation(raw);
+}
+
+function requestJudgeModel(endpoint, apiKey, body) {
+  const curl = spawnSync(
+    "curl",
+    [
+      "-sS",
+      "-X",
+      "POST",
+      endpoint,
+      "-H",
+      "content-type: application/json",
+      "-H",
+      `authorization: Bearer ${apiKey}`,
+      "-d",
+      JSON.stringify(body),
+      "-w",
+      "\n%{http_code}",
+    ],
+    { encoding: "utf8" },
+  );
+
+  if (curl.error) {
+    throw new Error(`Judge request failed: ${curl.error.message}`);
+  }
+
+  const combined = curl.stdout ?? "";
+  const splitAt = combined.lastIndexOf("\n");
+  const responseBody = splitAt === -1 ? combined.trim() : combined.slice(0, splitAt);
+  const status = splitAt === -1 ? 0 : Number(combined.slice(splitAt + 1).trim());
+
+  return { status, responseBody };
 }
 
 async function main() {

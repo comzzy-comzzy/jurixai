@@ -11,6 +11,80 @@ import {
   type AgentEvaluation,
 } from "@/lib/jurix/judge-model.server";
 import { getHackathonDetail, listHackathons } from "./data.server";
+import { sendUsdc } from "@/lib/chain";
+
+// Simple Promise chain to serialize txs and prevent nonce conflicts
+let agentPaymentQueue = Promise.resolve();
+
+async function payAgentForEvaluation(
+  hackathonId: string,
+  registrationId: string,
+  agent: JudgeAgent,
+  amount: number = 0.001,
+) {
+  const walletAddress = agent.wallet_address;
+  if (!walletAddress) {
+    console.log(`[agent payment] Agent ${agent.name} has no wallet_address configured. Skipping payment.`);
+    return;
+  }
+
+  // Queue the payment execution to serialize nonces
+  agentPaymentQueue = agentPaymentQueue.then(async () => {
+    const supabase = getSupabaseServerClient();
+    console.log(`[agent payment] Initiating payment of ${amount} USDC to ${agent.name} (${walletAddress})`);
+
+    // Insert pending payment record
+    const { data: paymentRecord, error: insertError } = await supabase
+      .from("payments")
+      .insert({
+        kind: "payout",
+        hackathon_id: hackathonId,
+        registration_id: registrationId,
+        to_address: walletAddress,
+        amount_usdc: amount,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (insertError) {
+      console.error(`[agent payment] Failed to log pending payment:`, insertError.message);
+    }
+
+    try {
+      // Execute the on-chain transfer
+      const txHash = await sendUsdc(walletAddress, amount);
+      console.log(`[agent payment] On-chain transfer successful. Hash: ${txHash}`);
+
+      // Update payment record to confirmed
+      if (paymentRecord) {
+        await supabase
+          .from("payments")
+          .update({
+            circle_tx_id: txHash,
+            status: "confirmed",
+          })
+          .eq("id", paymentRecord.id);
+      }
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "USDC transfer failed";
+      console.error(`[agent payment] On-chain transfer failed:`, errMsg);
+
+      // Update payment record to failed
+      if (paymentRecord) {
+        await supabase
+          .from("payments")
+          .update({
+            status: "failed",
+          })
+          .eq("id", paymentRecord.id);
+      }
+    }
+  });
+
+  // Await the queued payment to finish so the score isn't marked complete while payments are still running
+  await agentPaymentQueue;
+}
 
 async function ensureRunItems(
   runId: string,
@@ -191,6 +265,14 @@ export async function runHackathonJudging(
             submission,
           );
           await writeScore(run.id, submission, criterion, agent, evaluation);
+
+          // Pay the agent 0.001 USDC for evaluating the submission
+          try {
+            await payAgentForEvaluation(hackathon.id, submission.id, agent);
+          } catch (payErr) {
+            console.error(`[judging] Payment to agent ${agent.name} failed:`, payErr);
+          }
+
           scored += 1;
         });
       }

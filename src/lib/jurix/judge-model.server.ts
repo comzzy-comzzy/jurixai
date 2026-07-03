@@ -1024,7 +1024,7 @@ export async function evaluateSubmissionWithModel(
       continue;
     }
 
-    const payload = result.json ?? {};
+    const payload = (result.json ?? {}) as any;
     const raw =
       extractTextFromUnknown(payload.output_text) ||
       extractTextFromUnknown(payload.reply) ||

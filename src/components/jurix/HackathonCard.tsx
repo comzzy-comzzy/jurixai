@@ -45,8 +45,10 @@ export function HackathonCard({
             <p className="text-xs font-medium text-muted-foreground mb-0.5">
               {isOpen ? "Closes in" : hackathon.status === "judging" ? "Status" : "Result"}
             </p>
-            {isOpen ? (
+            {isOpen && hackathon.deadline ? (
               <Countdown to={hackathon.deadline} className="text-sm" />
+            ) : isOpen ? (
+              <p className="text-sm font-medium text-accent">Ongoing</p>
             ) : hackathon.status === "judging" ? (
               <p className="text-sm font-medium text-warn">Calculating</p>
             ) : (
