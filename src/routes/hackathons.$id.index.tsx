@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useWallet } from "@/lib/circle/useWallet";
 import { loadHackathonDetail } from "@/lib/jurix/actions.server";
@@ -9,6 +9,7 @@ import { Leaderboard } from "@/components/jurix/Leaderboard";
 import { StatusPill } from "@/components/jurix/StatusPill";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { fullUsdc, relativeDate } from "@/lib/format";
+import { readUsdcBalance } from "@/lib/chain";
 
 export const Route = createFileRoute("/hackathons/$id/")({
   loader: async ({ params }) => {
@@ -36,6 +37,26 @@ function HackathonDetail() {
   const hackathon = Route.useLoaderData();
   const [tab, setTab] = useState<"leaderboard" | "submissions">("leaderboard");
   const { wallet } = useWallet();
+
+  const durationDays = hackathon.start_date && hackathon.deadline
+    ? Math.ceil((new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
+  const adminFee = 1000 + (extraMonths * 100);
+  const totalFunding = hackathon.prize_pool_usdc + adminFee;
+
+  const [treasuryBalance, setTreasuryBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!hackathon.treasury_address) return;
+    let active = true;
+    readUsdcBalance(hackathon.treasury_address)
+      .then((bal) => active && setTreasuryBalance(bal))
+      .catch(() => active && setTreasuryBalance(null));
+    return () => {
+      active = false;
+    };
+  }, [hackathon.treasury_address]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -85,14 +106,65 @@ function HackathonDetail() {
         )}
       </header>
 
+      {hackathon.treasury_address && treasuryBalance !== null && treasuryBalance < totalFunding && (
+        <div className="mb-8 rounded-xl border border-warn/30 bg-warn/5 p-5 text-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="font-bold text-warn flex items-center gap-2">
+              <span>⚠️</span> Hackathon Pending Funding
+            </h3>
+            <p className="text-muted-foreground text-xs leading-relaxed max-w-2xl">
+              This hackathon is pending activation until the organizer deposits the total required funds. 
+              Please send exactly <span className="font-semibold text-foreground">{totalFunding.toLocaleString()} USDC</span> on **Arc Testnet** to the treasury address below to activate the hackathon.
+            </p>
+          </div>
+          <div className="flex flex-col items-end shrink-0 text-xs font-mono">
+            <div><span className="text-muted-foreground text-xs font-normal">Received:</span> <span className="text-warn font-semibold">{treasuryBalance.toLocaleString()} USDC</span></div>
+            <div><span className="text-muted-foreground text-xs font-normal">Required:</span> <span className="text-foreground font-semibold">{totalFunding.toLocaleString()} USDC</span></div>
+          </div>
+        </div>
+      )}
+
+      {hackathon.treasury_address && treasuryBalance !== null && treasuryBalance >= totalFunding && (
+        <div className="mb-8 rounded-xl border border-accent/30 bg-accent/5 p-5 text-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="font-bold text-accent flex items-center gap-2">
+              <span>✅</span> Hackathon Activated & Funded
+            </h3>
+            <p className="text-muted-foreground text-xs leading-relaxed max-w-2xl">
+              The required funding (Prize Pool + Platform Fee) of {totalFunding.toLocaleString()} USDC has been successfully verified on-chain. 
+              Submissions and payouts are fully active.
+            </p>
+          </div>
+          <div className="flex flex-col items-end shrink-0 text-xs font-mono text-accent">
+            <span className="font-bold uppercase tracking-wider bg-accent/20 px-2 py-0.5 rounded text-[10px]">Activated</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Prize pool</p>
-          <p className="text-2xl font-bold tabular-nums">
-            {fullUsdc(hackathon.prize_pool_usdc)}{" "}
-            <span className="text-sm font-semibold text-muted-foreground">USDC</span>
-          </p>
-          <div className="mt-3">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm flex flex-col justify-between">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Prize Pool & Admin Fees</p>
+            <p className="text-2xl font-bold tabular-nums mb-3">
+              {fullUsdc(hackathon.prize_pool_usdc)}{" "}
+              <span className="text-sm font-semibold text-muted-foreground font-normal">USDC Pool</span>
+            </p>
+            <div className="space-y-1.5 border-t border-border/80 pt-3 text-xs text-muted-foreground font-mono">
+              <div className="flex justify-between">
+                <span>Prize Pool:</span>
+                <span className="text-foreground">{hackathon.prize_pool_usdc.toLocaleString()} USDC</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Admin Fee:</span>
+                <span className="text-foreground">{adminFee.toLocaleString()} USDC</span>
+              </div>
+              <div className="flex justify-between font-bold border-t border-dashed border-border pt-1.5 text-accent">
+                <span>Total Funding:</span>
+                <span>{totalFunding.toLocaleString()} USDC</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4">
             <WalletAddress address={hackathon.treasury_address ?? "Treasury pending"} />
           </div>
         </div>

@@ -92,6 +92,13 @@ function CreateHackathon() {
   const steps = ["Basics", "Prize pool", "Criteria", "Review"];
   const totalWeight = criteria.reduce((sum, item) => sum + item.weight, 0);
 
+  const durationDays = form.startDate && form.deadline
+    ? Math.ceil((new Date(form.deadline).getTime() - new Date(form.startDate).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
+  const adminFee = 1000 + (extraMonths * 100);
+  const totalFunding = Number(form.prizePoolUsdc || 0) + adminFee;
+
   async function handleCreate() {
     setBusy(true);
     setError(null);
@@ -260,10 +267,32 @@ function CreateHackathon() {
                 ))}
               </div>
             </div>
-            <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm text-muted-foreground">
-              <p className="font-semibold text-accent mb-1">Treasury setup</p>
-              Treasury wallet creation is still pending Circle payout automation. The hackathon
-              record will still be created live.
+            <div className="rounded-xl border border-accent/30 bg-accent/5 p-5 text-sm space-y-3">
+              <p className="font-semibold text-accent mb-1 text-base">Payment & Funding Calculation</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Hosting a hackathon requires funding the prize pool + a platform fee in **Arc USDC**. 
+                The platform fee includes a flat $1,000 base fee, plus an extra 10% ($100) for each full month of duration.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-y-2 border-t border-b border-border/80 py-3 font-mono text-xs text-foreground">
+                <span className="text-muted-foreground">Prize Pool:</span>
+                <span className="text-right font-bold">{Number(form.prizePoolUsdc || 0).toLocaleString()} USDC</span>
+                
+                <span className="text-muted-foreground">Flat Admin Fee:</span>
+                <span className="text-right">1,000 USDC</span>
+
+                <span className="text-muted-foreground">Duration Extra Fee ({durationDays} days):</span>
+                <span className="text-right">{(extraMonths * 100).toLocaleString()} USDC</span>
+
+                <span className="text-foreground font-semibold text-sm">Total Required Funding:</span>
+                <span className="text-right font-bold text-accent text-sm">{totalFunding.toLocaleString()} USDC</span>
+              </div>
+
+              <p className="text-xs text-muted-foreground italic leading-relaxed">
+                Note: Upon deployment, your hackathon details will be published and pending funding. 
+                You will be prompted to deposit the total required **Arc USDC** to your dedicated Treasury Address, 
+                visible on the hackathon details page.
+              </p>
             </div>
           </>
         )}
@@ -364,7 +393,25 @@ function CreateHackathon() {
               <span className="text-muted-foreground">Pipeline</span>
               <span className="font-medium">Submit → Score → Settle</span>
             </div>
-            <p className="text-muted-foreground pt-3 border-t border-border leading-relaxed">
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Prize pool:</span>
+                <span className="font-semibold tabular-nums">{Number(form.prizePoolUsdc || 0).toLocaleString()} USDC</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Flat platform fee:</span>
+                <span className="font-semibold tabular-nums">1,000 USDC</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Duration extra fee ({durationDays} days):</span>
+                <span className="font-semibold tabular-nums">{(extraMonths * 100).toLocaleString()} USDC</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold text-accent pt-1 border-t border-dashed border-border">
+                <span className="text-foreground">Total required funding:</span>
+                <span className="tabular-nums">{totalFunding.toLocaleString()} USDC</span>
+              </div>
+            </div>
+            <p className="text-muted-foreground pt-3 border-t border-border leading-relaxed text-xs">
               This will create a live hackathon row and its judging criteria in Supabase
               immediately.
             </p>

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { toast } from "sonner";
 import {
   loadHackathons,
@@ -42,6 +42,7 @@ function Admin() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const totalPool = useMemo(
     () => hackathons.reduce((sum, hackathon) => sum + hackathon.prize_pool_usdc, 0),
@@ -143,60 +144,142 @@ function Admin() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {hackathons.map((hackathon) => (
-                <tr key={hackathon.id} className="hover:bg-muted/40 transition-colors">
-                  <td className="p-3 font-semibold text-foreground">{hackathon.name}</td>
-                  <td className="p-3">
-                    <StatusPill status={hackathon.status} />
-                  </td>
-                  <td className="p-3 tabular-nums font-medium text-accent">
-                    {fullUsdc(hackathon.prize_pool_usdc)}
-                  </td>
-                  <td className="p-3 tabular-nums">{hackathon.submission_count}</td>
-                  <td className="p-3 text-muted-foreground">
-                    {hackathon.deadline ? relativeDate(hackathon.deadline) : "TBD"}
-                  </td>
-                  <td className="p-3">
-                    <TreasuryCell hackathon={hackathon} />
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Link
-                        to="/hackathons/$id"
-                        params={{ id: hackathon.id }}
-                        className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors"
+              {hackathons.map((hackathon) => {
+                const isExpanded = expandedId === hackathon.id;
+                const durationDays = hackathon.start_date && hackathon.deadline
+                  ? Math.ceil((new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) / (1000 * 60 * 60 * 24))
+                  : 0;
+                const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
+                const adminFee = 1000 + (extraMonths * 100);
+                const totalFunding = hackathon.prize_pool_usdc + adminFee;
+
+                return (
+                  <Fragment key={hackathon.id}>
+                    <tr className="hover:bg-muted/40 transition-colors">
+                      <td 
+                        className="p-3 font-semibold text-foreground select-none cursor-pointer"
+                        onClick={() => setExpandedId(isExpanded ? null : hackathon.id)}
                       >
-                        View entries
-                      </Link>
-                      <button
-                        type="button"
-                        disabled={busyId === hackathon.id}
-                        onClick={async () => {
-                          setBusyId(hackathon.id);
-                          setActionMessage(null);
-                          try {
-                            const result = await triggerHackathonJudging({
-                              data: { hackathon_id: hackathon.id, triggered_by: "admin" },
-                            });
-                            setActionMessage(
-                              `Judging started for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows.`,
-                            );
-                          } catch (error) {
-                            setActionMessage(
-                              error instanceof Error ? error.message : "Failed to trigger judging.",
-                            );
-                          } finally {
-                            setBusyId(null);
-                          }
-                        }}
-                        className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
-                      >
-                        {busyId === hackathon.id ? "Running…" : "Run judging"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-[10px] w-3">{isExpanded ? "▼" : "▶"}</span>
+                          {hackathon.name}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <StatusPill status={hackathon.status} />
+                      </td>
+                      <td className="p-3 tabular-nums font-medium text-accent">
+                        {fullUsdc(hackathon.prize_pool_usdc)}
+                      </td>
+                      <td className="p-3 tabular-nums">{hackathon.submission_count}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {hackathon.deadline ? relativeDate(hackathon.deadline) : "TBD"}
+                      </td>
+                      <td className="p-3">
+                        <TreasuryCell hackathon={hackathon} />
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            to="/hackathons/$id"
+                            params={{ id: hackathon.id }}
+                            className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors"
+                          >
+                            View entries
+                          </Link>
+                          <button
+                            type="button"
+                            disabled={busyId === hackathon.id}
+                            onClick={async () => {
+                              setBusyId(hackathon.id);
+                              setActionMessage(null);
+                              try {
+                                const result = await triggerHackathonJudging({
+                                  data: { hackathon_id: hackathon.id, triggered_by: "admin" },
+                                });
+                                setActionMessage(
+                                  `Judging started for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows.`,
+                                );
+                              } catch (error) {
+                                setActionMessage(
+                                  error instanceof Error ? error.message : "Failed to trigger judging.",
+                                );
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}
+                            className="rounded-md border border-border px-3 py-1 font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+                          >
+                            {busyId === hackathon.id ? "Running…" : "Run judging"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-muted/5">
+                        <td colSpan={7} className="p-6 border-t border-b border-border/80">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-sm">
+                            <div className="space-y-4">
+                              <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Organizer & Setup Details</h4>
+                              <div className="grid grid-cols-2 gap-y-3">
+                                <div>
+                                  <p className="text-muted-foreground text-xs">Organizer Name</p>
+                                  <p className="font-medium text-foreground">{hackathon.organizer_name || "N/A"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground text-xs">Organizer Email</p>
+                                  <p className="font-medium text-foreground">{hackathon.organizer_email || "N/A"}</p>
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-muted-foreground text-xs">Duration & Dates</p>
+                                  <p className="font-medium text-foreground">
+                                    {hackathon.start_date ? new Date(hackathon.start_date).toLocaleDateString() : "N/A"} to{" "}
+                                    {hackathon.deadline ? new Date(hackathon.deadline).toLocaleDateString() : "N/A"}{" "}
+                                    <span className="text-muted-foreground text-xs font-normal">({durationDays} days)</span>
+                                  </p>
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-muted-foreground text-xs mb-1">Rewards Distribution (Winner Split)</p>
+                                  <div className="flex gap-2">
+                                    {hackathon.winner_split && hackathon.winner_split.length > 0 ? (
+                                      hackathon.winner_split.map((percent, i) => (
+                                        <span key={i} className="px-2.5 py-1 rounded bg-muted text-xs font-semibold">
+                                          {i + 1}st: {percent}%
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground text-xs">None configured</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Financial Audit & Fees</h4>
+                              <div className="grid grid-cols-2 gap-y-2 border-b border-border pb-3 text-xs">
+                                <span className="text-muted-foreground">Prize Pool:</span>
+                                <span className="font-semibold text-right">{hackathon.prize_pool_usdc.toLocaleString()} USDC</span>
+                                
+                                <span className="text-muted-foreground">Flat Admin Fee:</span>
+                                <span className="font-semibold text-right">1,000 USDC</span>
+
+                                <span className="text-muted-foreground">Duration Extra Fee ({durationDays} days):</span>
+                                <span className="font-semibold text-right">{(extraMonths * 100).toLocaleString()} USDC</span>
+
+                                <span className="text-foreground font-semibold text-sm">Total Required Funding:</span>
+                                <span className="font-bold text-accent text-right text-sm">{totalFunding.toLocaleString()} USDC</span>
+                              </div>
+
+                              <TreasuryVerificationCell hackathon={hackathon} totalFunding={totalFunding} />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -384,3 +467,55 @@ function TreasuryCell({ hackathon }: { hackathon: HackathonSummary }) {
     </div>
   );
 }
+
+function TreasuryVerificationCell({ hackathon, totalFunding }: { hackathon: HackathonSummary; totalFunding: number }) {
+  const [balance, setBalance] = useState<number | null>(null);
+  const address = hackathon.treasury_address;
+
+  useEffect(() => {
+    if (!address) {
+      setBalance(null);
+      return;
+    }
+    let cancelled = false;
+    readUsdcBalance(address)
+      .then((b) => !cancelled && setBalance(b))
+      .catch(() => !cancelled && setBalance(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
+  if (!address) {
+    return (
+      <div className="rounded-lg bg-warn/15 text-warn border border-warn/20 p-3.5 text-xs flex flex-col gap-1">
+        <span className="font-bold">No Treasury Address Set</span>
+        <span>Set a treasury address above to verify payment.</span>
+      </div>
+    );
+  }
+
+  const isFunded = balance !== null && balance >= totalFunding;
+
+  return (
+    <div className={`rounded-lg p-3.5 border ${isFunded ? "bg-accent/10 border-accent/30 text-foreground" : "bg-warn/10 border-warn/30 text-foreground"} text-xs flex flex-col gap-1.5`}>
+      <div className="flex justify-between items-center">
+        <span className="font-bold text-[13px]">Live Payment Verification</span>
+        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isFunded ? "bg-accent text-accent-foreground" : "bg-warn text-warn-foreground"}`}>
+          {balance === null ? "CHECKING" : isFunded ? "PAYMENT VERIFIED" : "PENDING PAYMENT"}
+        </span>
+      </div>
+      <div className="space-y-1 font-mono text-[11px] mt-1">
+        <p><span className="text-muted-foreground">EVM Wallet:</span> {address}</p>
+        <p>
+          <span className="text-muted-foreground">USDC Balance:</span>{" "}
+          <span className={isFunded ? "text-accent font-bold" : "text-warn font-bold"}>
+            {balance === null ? "..." : `${balance.toLocaleString()} USDC`}
+          </span>
+        </p>
+        <p><span className="text-muted-foreground">Required:</span> {totalFunding.toLocaleString()} USDC</p>
+      </div>
+    </div>
+  );
+}
+
