@@ -296,5 +296,3 @@ export function getHackathonProjects(hid: string) {
     .filter(p => p.hackathonId === hid)
     .sort((a, b) => b.compositeScore - a.compositeScore);
 }
-
-export const ADMIN_PASSWORD = "jurixai2026";
