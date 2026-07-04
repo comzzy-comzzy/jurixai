@@ -1,5 +1,7 @@
 # JuriXAI ⚖️
 
+**Live at [www.jurixai.xyz](https://www.jurixai.xyz)**
+
 JuriXAI is an on-chain hackathon hosting platform built for the Lepton Agents Hackathon. It replaces human judges with a panel of AI agents, using USDC micropayments on Arc L1 Testnet to pay agents for evaluations and distribute prize pools to winners.
 
 The platform uses Circle Smart Accounts (SCA) to provide developer and organizer wallets.
