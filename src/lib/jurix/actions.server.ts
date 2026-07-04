@@ -1,12 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getWalletSession } from "@/lib/account/session.server";
-import { getHackathonDetail, getHomeData, getSubmissionDetail, listHackathons, fetchWeightedScores } from "./data.server";
+import {
+  getOperatorAddress,
+  registerHackathonOnChain,
+  disbursePrizesOnChain,
+  cancelAndRefundOnChain,
+  sendUsdc,
+} from "@/lib/chain.server";
+import {
+  getHackathonDetail,
+  getHomeData,
+  getSubmissionDetail,
+  listHackathons,
+  fetchWeightedScores,
+} from "./data.server";
 import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
 import { requireAdmin } from "@/lib/admin/guard.server";
-import { readUsdcBalance } from "@/lib/chain";
-import { sendUsdc } from "@/lib/chain.server";
+import { readUsdcBalance, ESCROW_CONTRACT_ADDRESS } from "@/lib/chain";
 
 type HackathonCriterionInput = {
   name: string;
@@ -66,8 +78,33 @@ export const createHackathon = createServerFn({ method: "POST" })
     }
     const supabase = getSupabaseServerClient();
 
+    if (!data.name?.trim()) throw new Error("Hackathon name is required.");
+    if (!data.organizer_name?.trim()) throw new Error("Organizer name is required.");
+    if (!data.organizer_email?.trim()) throw new Error("Organizer email is required.");
+    if (!data.description?.trim()) throw new Error("Description is required.");
+    if (!data.start_date) throw new Error("Start date is required.");
+    if (!data.deadline) throw new Error("Submission deadline is required.");
+    if (new Date(data.deadline) <= new Date(data.start_date)) {
+      throw new Error("Submission deadline must be after the start date.");
+    }
+    if (data.prize_pool_usdc <= 0) {
+      throw new Error("Prize pool must be greater than 0 USDC.");
+    }
+
     const id = slugify(data.name);
+    if (!id) {
+      throw new Error("Hackathon name must contain at least one alphanumeric character.");
+    }
     const winnerSplit = data.winner_split.filter((n) => Number.isFinite(n) && n > 0);
+
+    let operatorAddress: string | null = null;
+    if (process.env.JURIX_OPERATOR_PRIVATE_KEY) {
+      try {
+        operatorAddress = getOperatorAddress();
+      } catch (e) {
+        console.error("Failed to derive operator address for new hackathon:", e);
+      }
+    }
 
     const { data: created, error } = await supabase
       .from("hackathons")
@@ -83,6 +120,7 @@ export const createHackathon = createServerFn({ method: "POST" })
         status: "open",
         winner_split: winnerSplit,
         host_user_id: userId,
+        treasury_address: ESCROW_CONTRACT_ADDRESS,
       })
       .select("id")
       .single();
@@ -100,6 +138,40 @@ export const createHackathon = createServerFn({ method: "POST" })
 
     const { error: criteriaError } = await supabase.from("judging_criteria").insert(criteria);
     if (criteriaError) throw new Error(criteriaError.message);
+
+    // Register on the master JuriXEscrow smart contract
+    try {
+      const durationDays =
+        data.start_date && data.deadline
+          ? Math.ceil(
+              (new Date(data.deadline).getTime() - new Date(data.start_date).getTime()) /
+                (1000 * 60 * 60 * 24),
+            )
+          : 0;
+      const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
+      const platformFee = 10 + extraMonths;
+      const totalFunding = data.prize_pool_usdc + platformFee;
+      const hosterAddress = session?.wallet?.address || getOperatorAddress();
+
+      console.log(
+        `[escrow] Relaying ${totalFunding} USDC from operator wallet into escrow contract ${ESCROW_CONTRACT_ADDRESS} before registration.`,
+      );
+      await sendUsdc(ESCROW_CONTRACT_ADDRESS, totalFunding);
+
+      console.log(
+        `[escrow] Registering hackathon ${created.id} on-chain with hoster: ${hosterAddress}, prize pool: ${data.prize_pool_usdc} USDC, platform fee: ${platformFee} USDC`,
+      );
+      await registerHackathonOnChain(created.id, hosterAddress, data.prize_pool_usdc, platformFee);
+    } catch (e) {
+      console.error("[escrow] On-chain registration failed, rolling back Supabase records:", e);
+      // Clean up Supabase records to prevent ghost entries
+      await supabase.from("judging_criteria").delete().eq("hackathon_id", created.id);
+      await supabase.from("hackathons").delete().eq("id", created.id);
+
+      throw new Error(
+        `Failed to register hackathon escrow on-chain: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
 
     return { id: created.id };
   });
@@ -158,7 +230,8 @@ export const loadJoinedSubmissions = createServerFn({ method: "GET" }).handler(a
   const supabase = getSupabaseServerClient();
   const { data: registrations, error } = await supabase
     .from("registrations")
-    .select(`
+    .select(
+      `
       id,
       hackathon_id,
       project_name,
@@ -178,7 +251,8 @@ export const loadJoinedSubmissions = createServerFn({ method: "GET" }).handler(a
         status,
         prize_pool_usdc
       )
-    `)
+    `,
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -198,7 +272,8 @@ export const loadHostedHackathons = createServerFn({ method: "GET" }).handler(as
   const supabase = getSupabaseServerClient();
   const { data: hackathons, error } = await supabase
     .from("hackathons")
-    .select(`
+    .select(
+      `
       id,
       name,
       status,
@@ -206,7 +281,8 @@ export const loadHostedHackathons = createServerFn({ method: "GET" }).handler(as
       prize_pool_usdc,
       created_at,
       registrations(count)
-    `)
+    `,
+    )
     .eq("host_user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -240,7 +316,7 @@ export const updateSubmission = createServerFn({ method: "POST" })
     }
 
     const supabase = getSupabaseServerClient();
-    
+
     // First, verify that this submission belongs to the user and is ongoing
     const { data: registration, error: fetchError } = await supabase
       .from("registrations")
@@ -258,8 +334,8 @@ export const updateSubmission = createServerFn({ method: "POST" })
 
     const hackathon = Array.isArray(registration.hackathons)
       ? registration.hackathons[0]
-      : (registration.hackathons as any);
-      
+      : registration.hackathons;
+
     if (!hackathon) {
       throw new Error("Associated hackathon not found.");
     }
@@ -316,7 +392,9 @@ export const testJudgeModel = createServerFn({ method: "POST" }).handler(async (
 
 export const loadHomeData = createServerFn({ method: "GET" }).handler(async () => getHomeData());
 
-export const loadHackathons = createServerFn({ method: "GET" }).handler(async () => listHackathons());
+export const loadHackathons = createServerFn({ method: "GET" }).handler(async () =>
+  listHackathons(),
+);
 
 export const loadHackathonDetail = createServerFn({ method: "GET" })
   .validator((data: { hackathon_id: string }) => data)
@@ -373,17 +451,22 @@ export const disburseHackathonPrizes = createServerFn({ method: "POST" })
       throw new Error("Treasury wallet has not been configured for this hackathon.");
     }
 
-    const durationDays = hackathon.start_date && hackathon.deadline
-      ? Math.ceil((new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
+    const durationDays =
+      hackathon.start_date && hackathon.deadline
+        ? Math.ceil(
+            (new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) /
+              (1000 * 60 * 60 * 24),
+          )
+        : 0;
     const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
-    const adminFee = 1000 + (extraMonths * 100);
+    const adminFee = 10 + extraMonths;
     const totalFunding = hackathon.prize_pool_usdc + adminFee;
+    const requiredEscrowBalance = hackathon.prize_pool_usdc;
 
     const treasuryBalance = await readUsdcBalance(hackathon.treasury_address);
-    if (treasuryBalance < totalFunding) {
+    if (treasuryBalance < requiredEscrowBalance) {
       throw new Error(
-        `Treasury underfunded. Live balance is ${treasuryBalance} USDC, but total required is ${totalFunding} USDC. Hoster must fund the treasury wallet first.`
+        `Treasury underfunded. Live balance is ${treasuryBalance} USDC, but prize escrow requires ${requiredEscrowBalance} USDC after the ${adminFee} USDC platform fee is forwarded.`,
       );
     }
 
@@ -413,7 +496,9 @@ export const disburseHackathonPrizes = createServerFn({ method: "POST" })
 
       const payoutAddress = project.payout_address?.trim();
       if (!payoutAddress || !/^0x[a-fA-F0-9]{40}$/.test(payoutAddress)) {
-        console.warn(`[payout] Winner rank ${i + 1} (${project.project_name}) has no valid payout address.`);
+        console.warn(
+          `[payout] Winner rank ${i + 1} (${project.project_name}) has no valid payout address.`,
+        );
         continue;
       }
 
@@ -440,20 +525,39 @@ export const disburseHackathonPrizes = createServerFn({ method: "POST" })
       .eq("hackathon_id", data.hackathon_id)
       .eq("kind", "payout")
       .in("registration_id", subIds);
-    
+
     const alreadyPaid = (done ?? []).some((p) =>
-      recipientAddresses.includes(String(p.to_address).toLowerCase())
+      recipientAddresses.includes(String(p.to_address).toLowerCase()),
     );
 
     if (alreadyPaid) {
       throw new Error("Prizes have already been disbursed for this hackathon.");
     }
 
-    // Process prize disbursements sequentially
-    const results: { address: string; amount: number; txHash: string; name: string }[] = [];
-    for (const p of payouts) {
-      console.log(`[payout] Sending reward of ${p.amount} USDC to ${p.name} (${p.address})`);
+    // Call the JuriXEscrow contract to disburse prizes atomically on-chain
+    let txHash = "";
+    try {
+      const winnerAddrs = payouts.map((p) => p.address);
+      const winnerAmounts = payouts.map((p) => p.amount);
 
+      console.log(
+        `[payout] Triggering escrow disbursement of prizes on-chain via JuriXEscrow for hackathon: ${data.hackathon_id}`,
+      );
+      txHash = await disbursePrizesOnChain(data.hackathon_id, winnerAddrs, winnerAmounts);
+      console.log(
+        `[payout] Smart contract escrow disbursement successful. Transaction hash: ${txHash}`,
+      );
+    } catch (contractErr) {
+      console.error("[payout] Failed on-chain smart contract disbursement:", contractErr);
+      throw new Error(
+        `Escrow disbursement failed: ${contractErr instanceof Error ? contractErr.message : String(contractErr)}`,
+      );
+    }
+
+    const results: { address: string; amount: number; txHash: string; name: string }[] = [];
+
+    // Log the payouts as confirmed under the single transaction hash
+    for (const p of payouts) {
       const { data: record, error: insErr } = await supabase
         .from("payments")
         .insert({
@@ -462,39 +566,148 @@ export const disburseHackathonPrizes = createServerFn({ method: "POST" })
           registration_id: p.registrationId,
           to_address: p.address,
           amount_usdc: p.amount,
-          status: "pending",
+          status: "confirmed",
+          circle_tx_id: txHash,
         })
         .select("id")
         .single();
-      
-      if (insErr || !record) {
-        console.error(`[payout] Failed to log payment pending record:`, insErr);
-        continue;
-      }
 
-      try {
-        const txHash = await sendUsdc(p.address, p.amount);
-
-        await supabase
-          .from("payments")
-          .update({
-            circle_tx_id: txHash,
-            status: "confirmed",
-          })
-          .eq("id", record.id);
-        
+      if (!insErr && record) {
         results.push({ address: p.address, amount: p.amount, txHash, name: p.name });
-      } catch (txErr) {
-        console.error(`[payout] On-chain reward transfer failed for ${p.address}:`, txErr);
-        await supabase
-          .from("payments")
-          .update({
-            status: "failed",
-            error_message: txErr instanceof Error ? txErr.message : String(txErr),
-          })
-          .eq("id", record.id);
       }
     }
 
     return { success: true, paidCount: results.length, payouts: results };
   });
+
+type UpdateHackathonInput = {
+  hackathon_id: string;
+  name: string;
+  description: string;
+  organizer_name: string;
+  organizer_email: string;
+  start_date: string;
+  deadline: string;
+};
+
+export const updateHackathon = createServerFn({ method: "POST" })
+  .validator((data: UpdateHackathonInput) => data)
+  .handler(async ({ data }) => {
+    ensureConfigured();
+    const session = await getWalletSession();
+    const userId = session?.profile?.userId;
+    if (!userId) {
+      throw new Error("You must sign in to edit this hackathon.");
+    }
+    if (!data.name?.trim()) throw new Error("Hackathon name is required.");
+    if (!data.organizer_name?.trim()) throw new Error("Organizer name is required.");
+    if (!data.organizer_email?.trim()) throw new Error("Organizer email is required.");
+    if (!data.description?.trim()) throw new Error("Description is required.");
+    if (!data.start_date) throw new Error("Start date is required.");
+    if (!data.deadline) throw new Error("Submission deadline is required.");
+    if (new Date(data.deadline) <= new Date(data.start_date)) {
+      throw new Error("Submission deadline must be after the start date.");
+    }
+
+    const supabase = getSupabaseServerClient();
+
+    // Verify host
+    const { data: hackathon, error: fetchError } = await supabase
+      .from("hackathons")
+      .select("host_user_id, status")
+      .eq("id", data.hackathon_id)
+      .single();
+
+    if (fetchError || !hackathon) {
+      throw new Error("Hackathon not found.");
+    }
+
+    if (hackathon.host_user_id !== userId) {
+      throw new Error("You do not have permission to edit this hackathon.");
+    }
+
+    if (hackathon.status !== "open") {
+      throw new Error("Cannot edit a hackathon that is no longer open.");
+    }
+
+    const { error: updateError } = await supabase
+      .from("hackathons")
+      .update({
+        name: data.name,
+        description: data.description,
+        organizer_name: data.organizer_name,
+        organizer_email: data.organizer_email,
+        start_date: data.start_date,
+        deadline: data.deadline,
+      })
+      .eq("id", data.hackathon_id);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    return { success: true };
+  });
+
+export const deleteHackathon = createServerFn({ method: "POST" })
+  .validator((data: { hackathon_id: string }) => data)
+  .handler(async ({ data }) => {
+    ensureConfigured();
+    const session = await getWalletSession();
+    const userId = session?.profile?.userId;
+    if (!userId) {
+      throw new Error("You must sign in to delete this hackathon.");
+    }
+    const supabase = getSupabaseServerClient();
+
+    // Verify host
+    const { data: hackathon, error: fetchError } = await supabase
+      .from("hackathons")
+      .select("host_user_id")
+      .eq("id", data.hackathon_id)
+      .single();
+
+    if (fetchError || !hackathon) {
+      throw new Error("Hackathon not found.");
+    }
+
+    if (hackathon.host_user_id !== userId) {
+      throw new Error("You do not have permission to delete this hackathon.");
+    }
+
+    // Trigger on-chain smart contract refund for the prize pool
+    try {
+      console.log(
+        `[escrow] Triggering on-chain cancel and refund for hackathon: ${data.hackathon_id}`,
+      );
+      const txHash = await cancelAndRefundOnChain(data.hackathon_id);
+      console.log(`[escrow] Escrow cancel and refund successful. Transaction hash: ${txHash}`);
+    } catch (contractErr) {
+      console.warn("[escrow] On-chain cancel/refund failed or not registered:", contractErr);
+      const errMsg = contractErr instanceof Error ? contractErr.message : String(contractErr);
+      if (errMsg.includes("finalized") || errMsg.includes("Already finalized")) {
+        throw new Error("Cannot delete hackathon: prizes have already been disbursed or refunded.");
+      }
+    }
+
+    const { error: deleteError } = await supabase
+      .from("hackathons")
+      .delete()
+      .eq("id", data.hackathon_id);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+
+    return { success: true };
+  });
+
+export const getOperatorWalletAddress = createServerFn({ method: "GET" }).handler(async () => {
+  ensureConfigured();
+  return getOperatorAddress();
+});
+
+export const getOperatorUsdcBalance = createServerFn({ method: "GET" }).handler(async () => {
+  ensureConfigured();
+  return readUsdcBalance(getOperatorAddress());
+});

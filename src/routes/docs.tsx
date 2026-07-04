@@ -1319,10 +1319,9 @@ function DocsPage() {
                     How do Circle wallet integrations work?
                   </h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    JuriXAI wraps the Circle Developer-Controlled Wallets API. Escrow contracts
-                    automatically hold deposited USDC. When a judging run closes, the verified
-                    standings trigger immediate API calls disbursing rewards to winner destination
-                    addresses.
+                    JuriXAI utilizes the <strong>JuriXEscrow v2</strong> smart contract deployed on Arc Testnet at <code className="bg-accent/15 px-1.5 py-0.5 rounded text-accent font-mono text-[10px]">0x89db74b925f694ebec1118cff9b08a1afe528785</code>. 
+                    When a hackathon is hosted, the organizer's deposit is sent directly to this escrow contract. The contract immediately forwards the platform fees to the fee collector and locks the remaining prize pool. 
+                    If the organizer deletes the hackathon before the deadline, the system triggers the contract's on-chain <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">cancelAndRefund</code> function, returning 100% of the prize pool USDC back to the hoster's profile account. Once results are judged, payouts are disbursed to the winners' smart accounts atomically in a single contract call.
                   </p>
                 </div>
               </div>

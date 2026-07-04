@@ -249,36 +249,6 @@ function ProfileRoute() {
               This is the gasless Circle wallet created at signup. Arc USDC prizes land here.
             </p>
           </div>
-
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <p className="text-xs font-mono uppercase tracking-[0.22em] text-muted-foreground">
-              Payout destination
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Where you want to withdraw winnings (any EVM address).
-            </p>
-            <div className="mt-4 space-y-4">
-              <Field label="Withdrawal address">
-                <input
-                  value={payoutEvmAddress}
-                  onChange={(e) => setPayoutEvmAddress(e.target.value)}
-                  placeholder="0x..."
-                  className={`${inputClass} font-mono`}
-                />
-              </Field>
-              <Field label="Destination chain">
-                <input
-                  value={payoutChain}
-                  onChange={(e) => setPayoutChain(e.target.value)}
-                  placeholder="ARC-TESTNET, BASE, ARB-SEPOLIA"
-                  className={inputClass}
-                />
-              </Field>
-              <p className="text-xs text-muted-foreground">
-                Saved with your profile above. Withdrawals go live soon.
-              </p>
-            </div>
-          </div>
         </aside>
       </div>
     </section>

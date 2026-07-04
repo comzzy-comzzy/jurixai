@@ -1,7 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { createHackathon, loadHomeData } from "@/lib/jurix/actions.server";
+import { toast } from "sonner";
+import {
+  createHackathon,
+  getOperatorUsdcBalance,
+  getOperatorWalletAddress,
+  loadHomeData,
+} from "@/lib/jurix/actions.server";
 import { useWallet } from "@/lib/circle/useWallet";
+import { readUsdcBalance } from "@/lib/chain";
+import { ShieldAlert } from "lucide-react";
+import type { Session } from "@/lib/circle/userWallet";
 
 export const Route = createFileRoute("/create")({
   loader: () => loadHomeData(),
@@ -103,18 +112,213 @@ function CreateHackathon() {
 
   const steps = ["Basics", "Prize pool", "Criteria", "Review"];
   const totalWeight = criteria.reduce((sum, item) => sum + item.weight, 0);
+  const splitSum = form.winnerSplit.reduce((sum, v) => sum + (Number(v) || 0), 0);
 
-  const durationDays = form.startDate && form.deadline
-    ? Math.ceil((new Date(form.deadline).getTime() - new Date(form.startDate).getTime()) / (1000 * 60 * 60 * 24))
-    : 0;
+  const durationDays =
+    form.startDate && form.deadline
+      ? Math.ceil(
+          (new Date(form.deadline).getTime() - new Date(form.startDate).getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
+      : 0;
   const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
-  const adminFee = 1000 + (extraMonths * 100);
+  const adminFee = 10 + extraMonths;
   const totalFunding = Number(form.prizePoolUsdc || 0) + adminFee;
 
+  const [activeChallengeId, setActiveChallengeId] = useState<string | null>(null);
+  const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [activeFundingAmount, setActiveFundingAmount] = useState<number | null>(null);
+  const [activeFundingRecipient, setActiveFundingRecipient] = useState<string | null>(null);
+  const [activeFundingRecipientMinBalance, setActiveFundingRecipientMinBalance] = useState<
+    number | null
+  >(null);
+  const [showPayConfirm, setShowPayConfirm] = useState(false);
+
+  const isStepValid = () => {
+    if (step === 0) {
+      const slugifiedId = form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      return (
+        form.name.trim() !== "" &&
+        slugifiedId !== "" &&
+        form.organizerName.trim() !== "" &&
+        form.organizerEmail.trim() !== "" &&
+        form.description.trim() !== "" &&
+        form.submissionInstructions.trim() !== "" &&
+        form.startDate !== "" &&
+        form.deadline !== "" &&
+        new Date(form.deadline) > new Date(form.startDate)
+      );
+    }
+    if (step === 1) {
+      return splitSum === 100 && Number(form.prizePoolUsdc) > 0;
+    }
+    if (step === 2) {
+      return totalWeight === 100;
+    }
+    return true;
+  };
+
+  const isFormValid = () => {
+    const slugifiedId = form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return (
+      form.name.trim() !== "" &&
+      slugifiedId !== "" &&
+      form.organizerName.trim() !== "" &&
+      form.organizerEmail.trim() !== "" &&
+      form.description.trim() !== "" &&
+      form.submissionInstructions.trim() !== "" &&
+      form.startDate !== "" &&
+      form.deadline !== "" &&
+      new Date(form.deadline) > new Date(form.startDate) &&
+      splitSum === 100 &&
+      Number(form.prizePoolUsdc) > 0 &&
+      totalWeight === 100
+    );
+  };
+
   async function handleCreate() {
+    if (!wallet) return;
     setBusy(true);
     setError(null);
     try {
+      const slugifiedId = form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      if (!form.name.trim() || !slugifiedId) {
+        throw new Error("Hackathon name must contain at least one alphanumeric character.");
+      }
+      if (!form.organizerName.trim()) {
+        throw new Error("Organizer name is required.");
+      }
+      if (!form.organizerEmail.trim()) {
+        throw new Error("Organizer email is required.");
+      }
+      if (!form.description.trim()) {
+        throw new Error("Description is required.");
+      }
+      if (!form.submissionInstructions.trim()) {
+        throw new Error("Submission instructions are required.");
+      }
+      if (!form.startDate) {
+        throw new Error("Start date is required.");
+      }
+      if (!form.deadline) {
+        throw new Error("Submission deadline is required.");
+      }
+      if (new Date(form.deadline) <= new Date(form.startDate)) {
+        throw new Error("Submission deadline must be after the start date.");
+      }
+      if (splitSum !== 100) {
+        throw new Error("Winner split must sum to exactly 100%.");
+      }
+      if (totalWeight !== 100) {
+        throw new Error("Judging criteria weights must sum to exactly 100%.");
+      }
+      if (Number(form.prizePoolUsdc) <= 0) {
+        throw new Error("Prize pool must be greater than 0 USDC.");
+      }
+
+      const operatorAddress = await getOperatorWalletAddress();
+      const operatorStartingBalance = await getOperatorUsdcBalance();
+
+      // 1. Fetch the latest user smart account balance
+      const freshBalance = await readUsdcBalance(wallet.address);
+      if (freshBalance < totalFunding) {
+        throw new Error(
+          `Insufficient balance in your smart wallet. You have ${freshBalance.toFixed(2)} USDC, but total required funding is ${totalFunding.toFixed(2)} USDC. Please fund your profile account first.`,
+        );
+      }
+
+      // 2. Prompt email OTP to login and get session (This opens the OTP iframe immediately under the click event)
+      const { getEmailSession } = await import("@/lib/circle/userWallet");
+      const session = await getEmailSession(wallet.identifier);
+      if (!session || !session.userToken) {
+        throw new Error("Failed to authenticate secure session.");
+      }
+
+      // 3. Generate the withdrawal challenge on the server
+      const { createWithdrawalTransaction } = await import("@/lib/circle/userWallet.server");
+      const tx = await createWithdrawalTransaction({
+        data: {
+          userToken: session.userToken,
+          recipientAddress: operatorAddress,
+          amount: totalFunding,
+        },
+      });
+
+      if (!tx.challengeId) {
+        throw new Error("Failed to generate payment challenge from Circle.");
+      }
+
+      // 4. Present the user-controlled payment authorization modal
+      setActiveChallengeId(tx.challengeId);
+      setActiveSession(session);
+      setActiveFundingAmount(totalFunding);
+      setActiveFundingRecipient(operatorAddress);
+      setActiveFundingRecipientMinBalance(operatorStartingBalance + totalFunding);
+      setShowPayConfirm(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to initiate payment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleExecutePaymentChallenge() {
+    if (
+      !activeChallengeId ||
+      !activeSession ||
+      activeFundingAmount === null ||
+      !activeFundingRecipient ||
+      activeFundingRecipientMinBalance === null
+    ) {
+      return;
+    }
+    setShowPayConfirm(false);
+    setBusy(true);
+    setError(null);
+
+    const tid = toast.loading("Launching secure verification window...");
+    try {
+      const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+      const { runChallenge } = await import("@/lib/circle/userWallet");
+
+      // Clean up the DOM container to ensure the PIN keyboard renders on a fresh iframe
+      if (typeof document !== "undefined") {
+        const existingRoot = document.getElementById("circle-w3s-root");
+        if (existingRoot) existingRoot.remove();
+      }
+
+      const sdkChallenge = new W3SSdk({
+        appSettings: { appId: import.meta.env.VITE_CIRCLE_APP_ID },
+      });
+      sdkChallenge.setAuthentication({
+        userToken: activeSession.userToken,
+        encryptionKey: activeSession.encryptionKey,
+      });
+
+      // Execute challenge synchronously inside the click handler (bypasses pop-up blocker)
+      await runChallenge(sdkChallenge, activeChallengeId);
+
+      toast.loading("Payment authorized. Waiting for Circle to settle the USDC transfer...", {
+        id: tid,
+      });
+      const { waitForFundingTransaction } = await import("@/lib/circle/userWallet.server");
+      const funding = await waitForFundingTransaction({
+        data: {
+          userToken: activeSession.userToken,
+          challengeId: activeChallengeId,
+          expectedDestination: activeFundingRecipient,
+          expectedAmount: activeFundingAmount,
+          minimumDestinationBalance: activeFundingRecipientMinBalance,
+        },
+      });
+
+      toast.loading(
+        funding.txHash
+          ? `Payment confirmed on-chain (${funding.txHash.slice(0, 10)}...). Deploying hackathon details...`
+          : "Payment confirmed. Deploying hackathon details & judging criteria...",
+        { id: tid },
+      );
+
       const result = await createHackathon({
         data: {
           name: form.name,
@@ -137,8 +341,16 @@ function CreateHackathon() {
           })),
         },
       });
+
+      toast.success("Hackathon successfully deployed and funded!", { id: tid });
+      setActiveChallengeId(null);
+      setActiveSession(null);
+      setActiveFundingAmount(null);
+      setActiveFundingRecipient(null);
+      setActiveFundingRecipientMinBalance(null);
       await navigate({ to: "/hackathons/$id", params: { id: result.id } });
     } catch (err) {
+      toast.dismiss(tid);
       setError(err instanceof Error ? err.message : "Failed to create hackathon.");
     } finally {
       setBusy(false);
@@ -204,6 +416,9 @@ function CreateHackathon() {
               onChange={(value) => setForm({ ...form, name: value })}
               required
             />
+            {form.name && !form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") && (
+              <p className="text-xs text-warn -mt-4">Hackathon name must contain at least one letter or number.</p>
+            )}
             <Field
               label="Organizer name"
               value={form.organizerName}
@@ -267,6 +482,9 @@ function CreateHackathon() {
                 required
               />
             </div>
+            {form.startDate && form.deadline && new Date(form.deadline) <= new Date(form.startDate) && (
+              <p className="text-xs text-warn">Submission deadline must be after the start date.</p>
+            )}
           </>
         )}
 
@@ -280,51 +498,164 @@ function CreateHackathon() {
               required
               mono
             />
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Winner split (% by rank)
-              </label>
-              <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium text-foreground">
+                  Winner split (% by rank)
+                </label>
+                <span
+                  className={`text-xs font-semibold ${splitSum === 100 ? "text-accent" : "text-warn"}`}
+                >
+                  Total: {splitSum}% {splitSum === 100 ? "✓" : "(must sum to exactly 100%)"}
+                </span>
+              </div>
+
+              {/* Preset buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, winnerSplit: ["50", "30", "20"] })}
+                  className="rounded bg-muted hover:bg-border border border-border px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer"
+                >
+                  Top 3 (50/30/20)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, winnerSplit: ["40", "25", "15", "12", "8"] })}
+                  className="rounded bg-muted hover:bg-border border border-border px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer"
+                >
+                  Top 5 (40/25/15/12/8)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      winnerSplit: ["30", "20", "15", "10", "8", "6", "4", "3", "2", "2"],
+                    })
+                  }
+                  className="rounded bg-muted hover:bg-border border border-border px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer"
+                >
+                  Top 10 (Graduated)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const N = form.winnerSplit.length;
+                    const base = Math.floor(100 / N);
+                    const remainder = 100 - base * N;
+                    const newSplits = Array.from({ length: N }, (_, i) =>
+                      String(base + (i < remainder ? 1 : 0)),
+                    );
+                    setForm({ ...form, winnerSplit: newSplits });
+                  }}
+                  className="rounded bg-muted hover:bg-border border border-border px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer"
+                >
+                  Split Evenly
+                </button>
+              </div>
+
+              {/* Dynamic list of split inputs */}
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                 {form.winnerSplit.map((value, index) => (
-                  <input
-                    key={index}
-                    value={value}
-                    type="number"
-                    onChange={(e) => {
-                      const next = [...form.winnerSplit];
-                      next[index] = e.target.value;
-                      setForm({ ...form, winnerSplit: next });
-                    }}
-                    className="rounded-lg bg-background border border-border px-3.5 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-                  />
+                  <div key={index} className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-muted-foreground w-16">
+                      Rank #{index + 1}:
+                    </span>
+                    <div className="relative flex-1">
+                      <input
+                        value={value}
+                        type="number"
+                        min="0"
+                        max="100"
+                        onChange={(e) => {
+                          const next = [...form.winnerSplit];
+                          next[index] = e.target.value;
+                          setForm({ ...form, winnerSplit: next });
+                        }}
+                        className="w-full rounded-lg bg-background border border-border px-3.5 py-2 pr-8 text-sm font-mono text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-mono">
+                        %
+                      </span>
+                    </div>
+                    {form.winnerSplit.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = form.winnerSplit.filter((_, i) => i !== index);
+                          setForm({ ...form, winnerSplit: next });
+                        }}
+                        className="rounded-lg border border-border bg-card p-2 text-muted-foreground hover:text-warn hover:border-warn/30 transition-colors cursor-pointer"
+                        title="Remove Rank"
+                      >
+                        <svg
+                          className="size-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
+
+              {/* Add Rank Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({ ...form, winnerSplit: [...form.winnerSplit, "0"] });
+                }}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-input transition-colors mt-2 cursor-pointer"
+              >
+                + Add Rank
+              </button>
             </div>
             <div className="rounded-xl border border-accent/30 bg-accent/5 p-5 text-sm space-y-3">
-              <p className="font-semibold text-accent mb-1 text-base">Payment & Funding Calculation</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                Hosting a hackathon requires funding the prize pool + a platform fee in **Arc USDC**. 
-                The platform fee includes a flat $1,000 base fee, plus an extra 10% ($100) for each full month of duration.
+              <p className="font-semibold text-accent mb-1 text-base">
+                Payment & Funding Calculation
               </p>
-              
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Hosting a hackathon requires funding the prize pool + a platform fee in **Arc
+                USDC**. The platform fee includes a flat $10 base fee, plus an extra 10% ($1) for
+                each full month of duration.
+              </p>
+
               <div className="grid grid-cols-2 gap-y-2 border-t border-b border-border/80 py-3 font-mono text-xs text-foreground">
                 <span className="text-muted-foreground">Prize Pool:</span>
-                <span className="text-right font-bold">{Number(form.prizePoolUsdc || 0).toLocaleString()} USDC</span>
-                
+                <span className="text-right font-bold">
+                  {Number(form.prizePoolUsdc || 0).toLocaleString()} USDC
+                </span>
+
                 <span className="text-muted-foreground">Flat Admin Fee:</span>
-                <span className="text-right">1,000 USDC</span>
+                <span className="text-right">10 USDC</span>
 
-                <span className="text-muted-foreground">Duration Extra Fee ({durationDays} days):</span>
-                <span className="text-right">{(extraMonths * 100).toLocaleString()} USDC</span>
+                <span className="text-muted-foreground">
+                  Duration Extra Fee ({durationDays} days):
+                </span>
+                <span className="text-right">{extraMonths.toLocaleString()} USDC</span>
 
-                <span className="text-foreground font-semibold text-sm">Total Required Funding:</span>
-                <span className="text-right font-bold text-accent text-sm">{totalFunding.toLocaleString()} USDC</span>
+                <span className="text-foreground font-semibold text-sm">
+                  Total Required Funding:
+                </span>
+                <span className="text-right font-bold text-accent text-sm">
+                  {totalFunding.toLocaleString()} USDC
+                </span>
               </div>
 
               <p className="text-xs text-muted-foreground italic leading-relaxed">
-                Note: Upon deployment, your hackathon details will be published and pending funding. 
-                You will be prompted to deposit the total required **Arc USDC** to your dedicated Treasury Address, 
-                visible on the hackathon details page.
+                Note: Upon deployment, you will be prompted to authorize the transfer of the total
+                required **Arc USDC** funding from your wallet directly to the secure Escrow Smart
+                Contract. Once authorized, your hackathon will be instantly activated and fully
+                funded.
               </p>
             </div>
           </>
@@ -429,15 +760,21 @@ function CreateHackathon() {
             <div className="border-t border-border pt-3 space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Prize pool:</span>
-                <span className="font-semibold tabular-nums">{Number(form.prizePoolUsdc || 0).toLocaleString()} USDC</span>
+                <span className="font-semibold tabular-nums">
+                  {Number(form.prizePoolUsdc || 0).toLocaleString()} USDC
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Flat platform fee:</span>
-                <span className="font-semibold tabular-nums">1,000 USDC</span>
+                <span className="font-semibold tabular-nums">10 USDC</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Duration extra fee ({durationDays} days):</span>
-                <span className="font-semibold tabular-nums">{(extraMonths * 100).toLocaleString()} USDC</span>
+                <span className="text-muted-foreground">
+                  Duration extra fee ({durationDays} days):
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {extraMonths.toLocaleString()} USDC
+                </span>
               </div>
               <div className="flex justify-between text-sm font-bold text-accent pt-1 border-t border-dashed border-border">
                 <span className="text-foreground">Total required funding:</span>
@@ -466,8 +803,8 @@ function CreateHackathon() {
             <button
               type="button"
               onClick={handleCreate}
-              disabled={busy}
-              className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+              disabled={busy || !isFormValid()}
+              className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
             >
               {busy ? "Creating…" : "Deploy hackathon"}
             </button>
@@ -475,13 +812,49 @@ function CreateHackathon() {
             <button
               type="button"
               onClick={() => setStep(step + 1)}
-              className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity"
+              disabled={!isStepValid()}
+              className="rounded-lg bg-accent text-accent-foreground px-6 py-3 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
             >
               Continue →
             </button>
           )}
         </div>
       </div>
+
+      {showPayConfirm && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-card border border-border p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-xl">
+            <div className="size-12 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
+              <ShieldAlert className="size-6 text-accent animate-pulse" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">Authorize Escrow Payment</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Your payment of <strong>{totalFunding.toFixed(2)} USDC</strong> (Prize Pool + Platform
+              Fee) is prepared.
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Click the button below to launch the secure Circle keyboard and enter your PIN to
+              authorize.
+            </p>
+            <div className="pt-2 space-y-2">
+              <button
+                type="button"
+                onClick={handleExecutePaymentChallenge}
+                className="w-full bg-accent hover:opacity-90 text-accent-foreground font-semibold py-2.5 rounded-xl text-sm transition-all shadow-md shadow-accent/20 cursor-pointer"
+              >
+                Open Secure PIN Keypad
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPayConfirm(false)}
+                className="w-full bg-transparent border border-border text-foreground hover:bg-muted py-2.5 rounded-xl text-sm transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -147,22 +147,30 @@ function Admin() {
             <tbody className="divide-y divide-border">
               {hackathons.map((hackathon) => {
                 const isExpanded = expandedId === hackathon.id;
-                const durationDays = hackathon.start_date && hackathon.deadline
-                  ? Math.ceil((new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) / (1000 * 60 * 60 * 24))
-                  : 0;
+                const durationDays =
+                  hackathon.start_date && hackathon.deadline
+                    ? Math.ceil(
+                        (new Date(hackathon.deadline).getTime() -
+                          new Date(hackathon.start_date).getTime()) /
+                          (1000 * 60 * 60 * 24),
+                      )
+                    : 0;
                 const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
-                const adminFee = 1000 + (extraMonths * 100);
+                const adminFee = 10 + extraMonths;
                 const totalFunding = hackathon.prize_pool_usdc + adminFee;
+                const requiredEscrowBalance = hackathon.prize_pool_usdc;
 
                 return (
                   <Fragment key={hackathon.id}>
                     <tr className="hover:bg-muted/40 transition-colors">
-                      <td 
+                      <td
                         className="p-3 font-semibold text-foreground select-none cursor-pointer"
                         onClick={() => setExpandedId(isExpanded ? null : hackathon.id)}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground text-[10px] w-3">{isExpanded ? "▼" : "▶"}</span>
+                          <span className="text-muted-foreground text-[10px] w-3">
+                            {isExpanded ? "▼" : "▶"}
+                          </span>
                           {hackathon.name}
                         </div>
                       </td>
@@ -202,11 +210,15 @@ function Admin() {
                                   const msg = `Judging completed for ${hackathon.name}. Run ${result.runId} wrote ${result.scored} score rows and settled agent fees.`;
                                   setActionMessage(msg);
                                   toast.success("Judging Completed!", {
-                                    description: "Successfully evaluated project submissions and paid agent fees.",
+                                    description:
+                                      "Successfully evaluated project submissions and paid agent fees.",
                                     duration: 6000,
                                   });
                                 } catch (error) {
-                                  const errMsg = error instanceof Error ? error.message : "Failed to trigger judging.";
+                                  const errMsg =
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Failed to trigger judging.";
                                   setActionMessage(errMsg);
                                   toast.error("Judging Failed", {
                                     description: errMsg,
@@ -236,7 +248,10 @@ function Admin() {
                                     duration: 8000,
                                   });
                                 } catch (error) {
-                                  const errMsg = error instanceof Error ? error.message : "Failed to disburse payouts.";
+                                  const errMsg =
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Failed to disburse payouts.";
                                   setActionMessage(errMsg);
                                   toast.error("Distribution Failed", {
                                     description: errMsg,
@@ -259,35 +274,67 @@ function Admin() {
                         <td colSpan={7} className="p-6 border-t border-b border-border/80">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-sm">
                             <div className="space-y-4">
-                              <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Organizer & Setup Details</h4>
+                              <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                                Organizer & Setup Details
+                              </h4>
                               <div className="grid grid-cols-2 gap-y-3">
                                 <div>
                                   <p className="text-muted-foreground text-xs">Organizer Name</p>
-                                  <p className="font-medium text-foreground">{hackathon.organizer_name || "N/A"}</p>
+                                  <p className="font-medium text-foreground">
+                                    {hackathon.organizer_name || "N/A"}
+                                  </p>
                                 </div>
                                 <div>
                                   <p className="text-muted-foreground text-xs">Organizer Email</p>
-                                  <p className="font-medium text-foreground">{hackathon.organizer_email || "N/A"}</p>
+                                  <p className="font-medium text-foreground">
+                                    {hackathon.organizer_email || "N/A"}
+                                  </p>
                                 </div>
                                 <div className="col-span-2">
                                   <p className="text-muted-foreground text-xs">Duration & Dates</p>
                                   <p className="font-medium text-foreground">
-                                    {hackathon.start_date ? new Date(hackathon.start_date).toLocaleDateString() : "N/A"} to{" "}
-                                    {hackathon.deadline ? new Date(hackathon.deadline).toLocaleDateString() : "N/A"}{" "}
-                                    <span className="text-muted-foreground text-xs font-normal">({durationDays} days)</span>
+                                    {hackathon.start_date
+                                      ? new Date(hackathon.start_date).toLocaleDateString()
+                                      : "N/A"}{" "}
+                                    to{" "}
+                                    {hackathon.deadline
+                                      ? new Date(hackathon.deadline).toLocaleDateString()
+                                      : "N/A"}{" "}
+                                    <span className="text-muted-foreground text-xs font-normal">
+                                      ({durationDays} days)
+                                    </span>
                                   </p>
                                 </div>
                                 <div className="col-span-2">
-                                  <p className="text-muted-foreground text-xs mb-1">Rewards Distribution (Winner Split)</p>
+                                  <p className="text-muted-foreground text-xs mb-1">
+                                    Rewards Distribution (Winner Split)
+                                  </p>
                                   <div className="flex gap-2">
                                     {hackathon.winner_split && hackathon.winner_split.length > 0 ? (
-                                      hackathon.winner_split.map((percent, i) => (
-                                        <span key={i} className="px-2.5 py-1 rounded bg-muted text-xs font-semibold">
-                                          {i + 1}st: {percent}%
-                                        </span>
-                                      ))
+                                      hackathon.winner_split.map((percent, i) => {
+                                        const rank = i + 1;
+                                        const suffix =
+                                          rank === 1
+                                            ? "st"
+                                            : rank === 2
+                                              ? "nd"
+                                              : rank === 3
+                                                ? "rd"
+                                                : "th";
+                                        return (
+                                          <span
+                                            key={i}
+                                            className="px-2.5 py-1 rounded bg-muted text-xs font-semibold"
+                                          >
+                                            {rank}
+                                            {suffix}: {percent}%
+                                          </span>
+                                        );
+                                      })
                                     ) : (
-                                      <span className="text-muted-foreground text-xs">None configured</span>
+                                      <span className="text-muted-foreground text-xs">
+                                        None configured
+                                      </span>
                                     )}
                                   </div>
                                 </div>
@@ -295,22 +342,37 @@ function Admin() {
                             </div>
 
                             <div className="space-y-4">
-                              <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Financial Audit & Fees</h4>
+                              <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                                Financial Audit & Fees
+                              </h4>
                               <div className="grid grid-cols-2 gap-y-2 border-b border-border pb-3 text-xs">
                                 <span className="text-muted-foreground">Prize Pool:</span>
-                                <span className="font-semibold text-right">{hackathon.prize_pool_usdc.toLocaleString()} USDC</span>
-                                
+                                <span className="font-semibold text-right">
+                                  {hackathon.prize_pool_usdc.toLocaleString()} USDC
+                                </span>
+
                                 <span className="text-muted-foreground">Flat Admin Fee:</span>
-                                <span className="font-semibold text-right">1,000 USDC</span>
+                                <span className="font-semibold text-right">10 USDC</span>
 
-                                <span className="text-muted-foreground">Duration Extra Fee ({durationDays} days):</span>
-                                <span className="font-semibold text-right">{(extraMonths * 100).toLocaleString()} USDC</span>
+                                <span className="text-muted-foreground">
+                                  Duration Extra Fee ({durationDays} days):
+                                </span>
+                                <span className="font-semibold text-right">
+                                  {extraMonths.toLocaleString()} USDC
+                                </span>
 
-                                <span className="text-foreground font-semibold text-sm">Total Required Funding:</span>
-                                <span className="font-bold text-accent text-right text-sm">{totalFunding.toLocaleString()} USDC</span>
+                                <span className="text-foreground font-semibold text-sm">
+                                  Total Required Funding:
+                                </span>
+                                <span className="font-bold text-accent text-right text-sm">
+                                  {totalFunding.toLocaleString()} USDC
+                                </span>
                               </div>
 
-                              <TreasuryVerificationCell hackathon={hackathon} totalFunding={totalFunding} />
+                              <TreasuryVerificationCell
+                                hackathon={hackathon}
+                                requiredEscrowBalance={requiredEscrowBalance}
+                              />
 
                               {hackathon.status === "closed" && (
                                 <div className="mt-4 pt-4 border-t border-border/80 col-span-2">
@@ -516,7 +578,13 @@ function TreasuryCell({ hackathon }: { hackathon: HackathonSummary }) {
   );
 }
 
-function TreasuryVerificationCell({ hackathon, totalFunding }: { hackathon: HackathonSummary; totalFunding: number }) {
+function TreasuryVerificationCell({
+  hackathon,
+  requiredEscrowBalance,
+}: {
+  hackathon: HackathonSummary;
+  requiredEscrowBalance: number;
+}) {
   const [balance, setBalance] = useState<number | null>(null);
   const address = hackathon.treasury_address;
 
@@ -543,25 +611,34 @@ function TreasuryVerificationCell({ hackathon, totalFunding }: { hackathon: Hack
     );
   }
 
-  const isFunded = balance !== null && balance >= totalFunding;
+  const isFunded = balance !== null && balance >= requiredEscrowBalance;
 
   return (
-    <div className={`rounded-lg p-3.5 border ${isFunded ? "bg-accent/10 border-accent/30 text-foreground" : "bg-warn/10 border-warn/30 text-foreground"} text-xs flex flex-col gap-1.5`}>
+    <div
+      className={`rounded-lg p-3.5 border ${isFunded ? "bg-accent/10 border-accent/30 text-foreground" : "bg-warn/10 border-warn/30 text-foreground"} text-xs flex flex-col gap-1.5`}
+    >
       <div className="flex justify-between items-center">
         <span className="font-bold text-[13px]">Live Payment Verification</span>
-        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isFunded ? "bg-accent text-accent-foreground" : "bg-warn text-warn-foreground"}`}>
+        <span
+          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isFunded ? "bg-accent text-accent-foreground" : "bg-warn text-warn-foreground"}`}
+        >
           {balance === null ? "CHECKING" : isFunded ? "PAYMENT VERIFIED" : "PENDING PAYMENT"}
         </span>
       </div>
       <div className="space-y-1 font-mono text-[11px] mt-1">
-        <p><span className="text-muted-foreground">EVM Wallet:</span> {address}</p>
+        <p>
+          <span className="text-muted-foreground">EVM Wallet:</span> {address}
+        </p>
         <p>
           <span className="text-muted-foreground">USDC Balance:</span>{" "}
           <span className={isFunded ? "text-accent font-bold" : "text-warn font-bold"}>
             {balance === null ? "..." : `${balance.toLocaleString()} USDC`}
           </span>
         </p>
-        <p><span className="text-muted-foreground">Required:</span> {totalFunding.toLocaleString()} USDC</p>
+        <p>
+          <span className="text-muted-foreground">Required Escrow:</span>{" "}
+          {requiredEscrowBalance.toLocaleString()} USDC
+        </p>
       </div>
     </div>
   );
@@ -595,7 +672,9 @@ function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
-          Disburse the **{hackathon.prize_pool_usdc.toLocaleString()} USDC** prize pool on-chain to the top projects according to the configured reward split ({hackathon.winner_split?.join(" / ")}%).
+          Disburse the **{hackathon.prize_pool_usdc.toLocaleString()} USDC** prize pool on-chain to
+          the top projects according to the configured reward split (
+          {hackathon.winner_split?.join(" / ")}%).
         </p>
         <button
           type="button"
@@ -611,8 +690,13 @@ function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
         <div className="mt-4 space-y-2 border-t border-border pt-3">
           <p className="text-[11px] font-bold text-accent">Confirmed Disbursements:</p>
           {payouts.map((p, i) => (
-            <div key={i} className="flex justify-between items-center text-xs font-mono bg-muted/40 p-2 rounded">
-              <span>{p.name} ({p.amount} USDC)</span>
+            <div
+              key={i}
+              className="flex justify-between items-center text-xs font-mono bg-muted/40 p-2 rounded"
+            >
+              <span>
+                {p.name} ({p.amount} USDC)
+              </span>
               <a
                 href={explorerTx(p.txHash)}
                 target="_blank"
@@ -628,4 +712,3 @@ function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
     </div>
   );
 }
-

@@ -10,7 +10,8 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
-import { USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
+import { createPublicClient, erc20Abi, http, parseUnits } from "viem";
+import { ARC_RPC_URL, USDC_ADDRESS, USDC_DECIMALS, CHAIN_NAME, activeChain } from "@/lib/chain";
 
 const CHAIN = process.env.CIRCLE_CHAIN || "ARC-TESTNET";
 
@@ -20,6 +21,12 @@ function client() {
     throw new Error("CIRCLE_API_KEY is not set on the server (add it in Vercel).");
   }
   return initiateUserControlledWalletsClient({ apiKey });
+}
+
+type CreateTransactionInput = Parameters<ReturnType<typeof client>["createTransaction"]>[0];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Report whether the server has the minimum config required for email login. */
@@ -53,19 +60,19 @@ export const provisionWallet = createServerFn({ method: "POST" })
     // 1. Fast path: check if user and their wallet already exist in our Supabase DB
     const url = process.env.VITE_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (url && serviceKey) {
       const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(url, serviceKey, {
         auth: { persistSession: false, autoRefreshToken: false },
       });
-      
+
       const { data: user } = await supabase
         .from("users")
         .select("id")
         .eq("email", data.email)
         .maybeSingle();
-        
+
       if (user) {
         const { data: wallet } = await supabase
           .from("wallets")
@@ -73,7 +80,7 @@ export const provisionWallet = createServerFn({ method: "POST" })
           .eq("user_id", user.id)
           .eq("is_primary", true)
           .maybeSingle();
-          
+
         if (wallet?.smart_account) {
           return { challengeId: null as string | null, address: wallet.smart_account };
         }
@@ -108,23 +115,23 @@ export const listUserWallets = createServerFn({ method: "POST" })
     return { id: w?.id ?? null, address: w?.address ?? null, blockchain: w?.blockchain ?? null };
   });
 
-/** Create a transfer challenge for withdrawing USDC from a user's wallet. */
 export const createWithdrawalTransaction = createServerFn({ method: "POST" })
-  .validator(
-    (d: {
-      userToken: string;
-      walletId: string;
-      recipientAddress: string;
-      amount: number;
-    }) => d,
-  )
+  .validator((d: { userToken: string; recipientAddress: string; amount: number }) => d)
   .handler(async ({ data }) => {
     const c = client();
+
+    // Fetch user wallets to find the walletId internally
+    const walletsRes = await c.listWallets({ userToken: data.userToken });
+    const walletId = walletsRes.data?.wallets?.[0]?.id;
+    if (!walletId) {
+      throw new Error("Could not locate your Circle wallet ID on the server.");
+    }
+
     // 1. Fetch user's token balances to find the dynamic USDC tokenId registered by Circle
     let tokenId = "";
     try {
       const balancesRes = await c.getWalletTokenBalance({
-        walletId: data.walletId,
+        walletId,
         userToken: data.userToken,
       });
       const tokenBalances = balancesRes.data?.tokenBalances ?? [];
@@ -134,13 +141,16 @@ export const createWithdrawalTransaction = createServerFn({ method: "POST" })
         tokenId = usdcToken.token.id;
       }
     } catch (e) {
-      console.warn("[createWithdrawalTransaction] failed to fetch balances, using fallback address:", e);
+      console.warn(
+        "[createWithdrawalTransaction] failed to fetch balances, using fallback address:",
+        e,
+      );
     }
 
-    const txParams: any = {
+    const txParams: CreateTransactionInput = {
       userToken: data.userToken,
       idempotencyKey: crypto.randomUUID(),
-      walletId: data.walletId,
+      walletId,
       amounts: [String(data.amount)],
       destinationAddress: data.recipientAddress,
       fee: {
@@ -155,11 +165,164 @@ export const createWithdrawalTransaction = createServerFn({ method: "POST" })
       txParams.tokenId = tokenId;
     } else {
       // Fallback: pass tokenAddress and blockchain
-      const blockchainParam = (CHAIN_NAME === "polygonAmoy" ? "MATIC-AMOY" : CHAIN_NAME) as any;
+      const blockchainParam = (
+        CHAIN_NAME === "polygonAmoy" ? "MATIC-AMOY" : CHAIN_NAME
+      ) as NonNullable<CreateTransactionInput["blockchain"]>;
       txParams.tokenAddress = USDC_ADDRESS;
       txParams.blockchain = blockchainParam;
     }
 
     const res = await c.createTransaction(txParams);
     return { challengeId: res.data?.challengeId ?? null };
+  });
+
+export const waitForFundingTransaction = createServerFn({ method: "POST" })
+  .validator(
+    (d: {
+      userToken: string;
+      challengeId: string;
+      expectedDestination: string;
+      expectedAmount: number;
+      minimumDestinationBalance?: number;
+      timeoutMs?: number;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const c = client();
+    const publicClient = createPublicClient({
+      chain: activeChain,
+      transport: http(ARC_RPC_URL),
+    });
+    const timeoutMs = Math.min(Math.max(data.timeoutMs ?? 120_000, 15_000), 300_000);
+    const deadline = Date.now() + timeoutMs;
+    const expectedDestination = data.expectedDestination.toLowerCase();
+    const minimumDestinationBalance =
+      data.minimumDestinationBalance != null
+        ? parseUnits(data.minimumDestinationBalance.toFixed(6), USDC_DECIMALS)
+        : null;
+    let transactionId: string | null = null;
+    let lastChallengeStatus = "PENDING";
+    let lastTransactionState = "INITIATED";
+
+    while (Date.now() < deadline) {
+      const challengeRes = await c.getUserChallenge({
+        userToken: data.userToken,
+        challengeId: data.challengeId,
+      });
+      const challenge = challengeRes.data?.challenge;
+
+      if (!challenge) {
+        throw new Error("Could not load your Circle payment challenge.");
+      }
+
+      lastChallengeStatus = challenge.status;
+      transactionId = challenge.correlationIds?.[0] ?? transactionId;
+
+      if (challenge.status === "FAILED" || challenge.status === "EXPIRED") {
+        throw new Error(
+          challenge.errorMessage ||
+            `Circle payment authorization ${challenge.status.toLowerCase()}.`,
+        );
+      }
+
+      if (challenge.status === "COMPLETE" && transactionId) {
+        break;
+      }
+
+      await sleep(2_000);
+    }
+
+    if (!transactionId) {
+      throw new Error(
+        `Circle did not return a transaction ID. Challenge status: ${lastChallengeStatus.toLowerCase()}.`,
+      );
+    }
+
+    while (Date.now() < deadline) {
+      const txRes = await c.getTransaction({
+        userToken: data.userToken,
+        id: transactionId,
+      });
+      const tx = txRes.data?.transaction;
+
+      if (!tx) {
+        throw new Error("Could not load the Circle funding transaction.");
+      }
+
+      lastTransactionState = tx.state;
+
+      if (tx.destinationAddress && tx.destinationAddress.toLowerCase() !== expectedDestination) {
+        throw new Error(
+          `Circle routed funds to ${tx.destinationAddress}, not the escrow contract.`,
+        );
+      }
+
+      const amount = Number(tx.amounts?.[0] ?? "0");
+      if (
+        Number.isFinite(amount) &&
+        amount > 0 &&
+        Math.abs(amount - data.expectedAmount) > 0.000001
+      ) {
+        throw new Error(
+          `Circle authorized ${amount} USDC, but JuriXAI expected ${data.expectedAmount} USDC.`,
+        );
+      }
+
+      if (tx.state === "FAILED" || tx.state === "DENIED" || tx.state === "CANCELLED") {
+        throw new Error(
+          tx.errorDetails || tx.errorReason || `Circle transaction ${tx.state.toLowerCase()}.`,
+        );
+      }
+
+      if (tx.state === "CONFIRMED" || tx.state === "COMPLETE") {
+        if (tx.txHash) {
+          await publicClient.waitForTransactionReceipt({
+            hash: tx.txHash as `0x${string}`,
+            timeout: 30_000,
+          });
+        }
+
+        if (minimumDestinationBalance !== null) {
+          while (Date.now() < deadline) {
+            const destinationBalance = (await publicClient.readContract({
+              address: USDC_ADDRESS,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [data.expectedDestination as `0x${string}`],
+            })) as bigint;
+
+            if (destinationBalance >= minimumDestinationBalance) {
+              break;
+            }
+
+            await sleep(2_000);
+          }
+
+          const finalDestinationBalance = (await publicClient.readContract({
+            address: USDC_ADDRESS,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [data.expectedDestination as `0x${string}`],
+          })) as bigint;
+
+          if (finalDestinationBalance < minimumDestinationBalance) {
+            throw new Error(
+              `Circle reported the payment complete, but ${data.expectedDestination} never received the required USDC on-chain.`,
+            );
+          }
+        }
+
+        return {
+          transactionId,
+          txHash: tx.txHash ?? null,
+          state: tx.state,
+        };
+      }
+
+      await sleep(3_000);
+    }
+
+    throw new Error(
+      `Circle payment is still ${lastTransactionState.toLowerCase()}. Please wait for settlement and try again.`,
+    );
   });

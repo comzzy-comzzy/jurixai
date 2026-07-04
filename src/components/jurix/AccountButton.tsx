@@ -205,17 +205,17 @@ export function AccountButton() {
                       } else if (status === "verifying_wallet") {
                         toast.loading("Connecting wallet session...", { id: tid });
                       } else if (status === "awaiting_pin") {
-                        toast.loading("Create your wallet security PIN in the popup...", { id: tid });
+                        toast.loading("PIN keypad loading... Please wait for the keyboard to pop up in the secure window.", { id: tid });
                       } else if (status === "polling_address") {
-                        toast.loading("Deploying smart wallet on-chain (please wait, up to 20s)...", { id: tid });
+                        toast.loading("Security PIN set! Creating and deploying smart wallet on-chain (please wait, up to 20s)...", { id: tid });
                       }
                     });
                     toast.success("Wallet ready", {
                       id: tid,
                       description: "Your Circle wallet is connected.",
                     });
-                    router.invalidate();
-                    router.navigate({ to: "/profile" });
+                    // Force a full reload to the profile dashboard to completely bypass any SPA route caching
+                    window.location.href = "/profile";
                   } catch (err) {
                     const msg = err instanceof Error ? err.message : "Email login failed";
                     toast.error("Login failed", {
@@ -260,8 +260,7 @@ export function AccountButton() {
                       await signUp(handle.trim());
                       setOpen(false);
                       toast.success("Passkey wallet created");
-                      router.invalidate();
-                      router.navigate({ to: "/profile" });
+                      window.location.href = "/profile";
                     } catch {
                       /* error shown inline */
                     }
@@ -277,8 +276,7 @@ export function AccountButton() {
                       await logIn(handle.trim());
                       setOpen(false);
                       toast.success("Passkey wallet connected");
-                      router.invalidate();
-                      router.navigate({ to: "/profile" });
+                      window.location.href = "/profile";
                     } catch {
                       /* error shown inline */
                     }

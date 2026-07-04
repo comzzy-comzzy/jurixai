@@ -1,4 +1,5 @@
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getOperatorAddress } from "@/lib/chain.server";
 import type {
   ActivityEvent,
   HackathonDetail,
@@ -136,6 +137,16 @@ function parseHackathonContent(description: string | null): {
 
 function normalizeHackathon(row: Record<string, unknown>, submissionCount = 0): HackathonSummary {
   const parsed = parseHackathonContent(row.description ? String(row.description) : null);
+  
+  let treasuryAddr = row.treasury_address ? String(row.treasury_address) : null;
+  if (!treasuryAddr && process.env.JURIX_OPERATOR_PRIVATE_KEY) {
+    try {
+      treasuryAddr = getOperatorAddress();
+    } catch (e) {
+      console.error("Failed to derive operator address in normalizeHackathon:", e);
+    }
+  }
+
   return {
     id: String(row.id),
     name: String(row.name),
@@ -150,10 +161,11 @@ function normalizeHackathon(row: Record<string, unknown>, submissionCount = 0): 
     deadline: row.deadline ? String(row.deadline) : null,
     status: String(row.status) as HackathonSummary["status"],
     treasury_wallet_id: row.treasury_wallet_id ? String(row.treasury_wallet_id) : null,
-    treasury_address: row.treasury_address ? String(row.treasury_address) : null,
+    treasury_address: treasuryAddr,
     winner_split: Array.isArray(row.winner_split) ? row.winner_split.map(toNumber) : [],
     created_at: String(row.created_at),
     submission_count: submissionCount,
+    host_user_id: row.host_user_id ? String(row.host_user_id) : null,
   };
 }
 

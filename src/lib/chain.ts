@@ -63,3 +63,55 @@ export async function readUsdcBalance(address: string): Promise<number> {
   })) as bigint;
   return Number(formatUnits(raw, USDC_DECIMALS));
 }
+
+export const ESCROW_CONTRACT_ADDRESS = "0x89db74b925f694ebec1118cff9b08a1afe528785";
+
+export const escrowAbi = [
+  {
+    inputs: [
+      { internalType: "string", name: "hackathonId", type: "string" }
+    ],
+    name: "cancelAndRefund",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  },
+  {
+    inputs: [
+      { internalType: "string", name: "hackathonId", type: "string" },
+      { internalType: "address[]", name: "winners", type: "address[]" },
+      { internalType: "uint256[]", name: "amounts", type: "uint256[]" }
+    ],
+    name: "disbursePrizes",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  },
+  {
+    inputs: [{ internalType: "string", name: "", type: "string" }],
+    name: "hackathons",
+    outputs: [
+      { internalType: "address", name: "hoster", type: "address" },
+      { internalType: "uint256", name: "prizePool", type: "uint256" },
+      { internalType: "uint256", name: "platformFee", type: "uint256" },
+      { internalType: "bool", name: "disbursed", type: "bool" },
+      { internalType: "bool", name: "exists", type: "bool" }
+    ],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [
+      { internalType: "string", name: "hackathonId", type: "string" },
+      { internalType: "address", name: "hoster", type: "address" },
+      { internalType: "uint256", name: "prizePool", type: "uint256" },
+      { internalType: "uint256", name: "platformFee", type: "uint256" }
+    ],
+    name: "registerHackathon",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  }
+] as const;
+
+

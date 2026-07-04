@@ -9,6 +9,7 @@
  */
 import { emailLoginStart, provisionWallet, listUserWallets } from "./userWallet.server";
 import type { CircleWallet } from "./wallet";
+import { toast } from "sonner";
 
 const APP_ID = import.meta.env.VITE_CIRCLE_APP_ID as string | undefined;
 const CHAIN = (import.meta.env.VITE_CIRCLE_CHAIN as string | undefined) || "ARC-TESTNET";
@@ -21,10 +22,23 @@ export function userWalletChain(): string {
   return CHAIN;
 }
 
-interface Session {
+export interface Session {
   userToken: string;
   encryptionKey: string;
 }
+
+type CircleLoginError = {
+  message?: string;
+};
+
+type CircleLoginResult = {
+  userToken?: string;
+  encryptionKey?: string;
+  data?: {
+    userToken?: string;
+    encryptionKey?: string;
+  };
+};
 
 /**
  * Circle's SDK deps (jsonwebtoken/uuid) expect Node globals in the browser. The
@@ -41,7 +55,7 @@ async function ensureBrowserGlobals(): Promise<void> {
     g.Buffer = Buffer;
   }
   if (!g.process) {
-    const proc = (await import("process/browser" as any)) as { default?: unknown };
+    const proc = (await import("process/browser")) as { default?: unknown };
     g.process = proc.default ?? proc;
   }
 }
@@ -50,13 +64,104 @@ async function ensureBrowserGlobals(): Promise<void> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type W3S = any;
 
+type CircleChallengeResult = {
+  type: string;
+  status: string;
+  data?: {
+    signature?: string;
+    txHash?: string;
+    signedTransaction?: string;
+  };
+};
+
+/** Initiate email OTP login and return the session token when verified. */
+export async function getEmailSession(email: string): Promise<Session> {
+  if (!APP_ID) throw new Error("Circle App ID is missing (VITE_CIRCLE_APP_ID).");
+  await ensureBrowserGlobals();
+  const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+
+  let resolveLogin!: (s: Session) => void;
+  let rejectLogin!: (e: Error) => void;
+  const loginDone = new Promise<Session>((res, rej) => {
+    resolveLogin = res;
+    rejectLogin = rej;
+  });
+
+  if (typeof document !== "undefined") {
+    const existingRoot = document.getElementById("circle-w3s-root");
+    if (existingRoot) existingRoot.remove();
+  }
+
+  const sdk: W3S = new W3SSdk(
+    { appSettings: { appId: APP_ID } },
+    (error: CircleLoginError | undefined, result: CircleLoginResult | undefined) => {
+      if (error) {
+        const rawMsg = error?.message || "Email verification failed.";
+        const isCancel =
+          rawMsg.toLowerCase().includes("cancel") ||
+          rawMsg.toLowerCase().includes("close") ||
+          rawMsg.toLowerCase().includes("dismiss");
+        return rejectLogin(new Error(isCancel ? "Verification was cancelled by user." : rawMsg));
+      }
+      const userToken = result?.userToken ?? result?.data?.userToken;
+      const encryptionKey = result?.encryptionKey ?? result?.data?.encryptionKey;
+      if (!userToken || !encryptionKey) {
+        return rejectLogin(new Error("Verification did not return a session."));
+      }
+      resolveLogin({ userToken, encryptionKey });
+    },
+  );
+
+  const deviceId = await sdk.getDeviceId();
+  const tok = await emailLoginStart({ data: { email, deviceId } });
+  sdk.updateConfigs({
+    appSettings: { appId: APP_ID },
+    loginConfigs: {
+      deviceToken: tok.deviceToken,
+      deviceEncryptionKey: tok.deviceEncryptionKey,
+      otpToken: tok.otpToken,
+    },
+  });
+
+  sdk.verifyOtp();
+  return loginDone;
+}
+
 /** Run a Circle challenge (PIN setup / signing) on an existing SDK instance. */
-function runChallenge(sdk: W3S, challengeId: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    sdk.execute(challengeId, (error: { message?: string } | undefined) => {
-      if (error) reject(new Error(error.message || "PIN setup failed."));
-      else resolve();
+export function runChallenge(sdk: W3S, challengeId: string): Promise<CircleChallengeResult> {
+  return new Promise<CircleChallengeResult>((resolve, reject) => {
+    toast.info("Launching secure challenge window...", {
+      description: `Challenge ID: ${challengeId.substring(0, 8)}...`,
     });
+
+    sdk.execute(
+      challengeId,
+      (error: { message?: string } | undefined, result: CircleChallengeResult | undefined) => {
+        if (error) {
+          const rawMsg = error.message || "Challenge failed.";
+          toast.error("Challenge verification failed", { description: rawMsg });
+          const isCancel =
+            rawMsg.toLowerCase().includes("cancel") ||
+            rawMsg.toLowerCase().includes("close") ||
+            rawMsg.toLowerCase().includes("dismiss");
+          reject(new Error(isCancel ? "Verification was cancelled by user." : rawMsg));
+          return;
+        }
+
+        if (!result) {
+          reject(new Error("Challenge finished without a result."));
+          return;
+        }
+
+        if (result.status === "FAILED" || result.status === "EXPIRED") {
+          reject(new Error(`Challenge ended with status ${result.status.toLowerCase()}.`));
+          return;
+        }
+
+        toast.success("Verification captured successfully.");
+        resolve(result);
+      },
+    );
   });
 }
 
@@ -81,7 +186,7 @@ async function waitForWalletAddress(userToken: string, tries = 30): Promise<stri
  */
 export async function emailSignIn(
   email: string,
-  onStatusUpdate?: (status: string) => void
+  onStatusUpdate?: (status: string) => void,
 ): Promise<CircleWallet> {
   if (!APP_ID) throw new Error("Circle App ID is missing (VITE_CIRCLE_APP_ID).");
   await ensureBrowserGlobals();
@@ -100,7 +205,14 @@ export async function emailSignIn(
     // onLoginComplete
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (error: any, result: any) => {
-      if (error) return rejectLogin(new Error(error?.message || "Email login failed."));
+      if (error) {
+        const rawMsg = error?.message || "Email login failed.";
+        const isCancel =
+          rawMsg.toLowerCase().includes("cancel") ||
+          rawMsg.toLowerCase().includes("close") ||
+          rawMsg.toLowerCase().includes("dismiss");
+        return rejectLogin(new Error(isCancel ? "Verification was cancelled by user." : rawMsg));
+      }
       const userToken = result?.userToken ?? result?.data?.userToken;
       const encryptionKey = result?.encryptionKey ?? result?.data?.encryptionKey;
       if (!userToken || !encryptionKey) {
@@ -121,7 +233,7 @@ export async function emailSignIn(
       otpToken: tok.otpToken,
     },
   });
-  
+
   onStatusUpdate?.("awaiting_otp");
   sdk.verifyOtp();
 
@@ -139,7 +251,7 @@ export async function emailSignIn(
       encryptionKey: session.encryptionKey,
     });
     await runChallenge(sdk, prov.challengeId);
-    
+
     onStatusUpdate?.("polling_address");
     address = await waitForWalletAddress(session.userToken);
   }
@@ -165,66 +277,94 @@ export async function executeWithdrawal(
   const { createWithdrawalTransaction } = await import("./userWallet.server");
 
   // 1) Authenticate with the email OTP. onLoginComplete yields the session.
-  let resolveLogin!: (s: Session) => void;
-  let rejectLogin!: (e: Error) => void;
-  const loginDone = new Promise<Session>((res, rej) => {
-    resolveLogin = res;
-    rejectLogin = rej;
-  });
+  const tid = toast.loading("Initiating secure transaction...");
 
-  const sdk: W3S = new W3SSdk(
-    { appSettings: { appId: APP_ID } },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (error: any, result: any) => {
-      if (error) return rejectLogin(new Error(error?.message || "Email verification failed."));
-      const userToken = result?.userToken ?? result?.data?.userToken;
-      const encryptionKey = result?.encryptionKey ?? result?.data?.encryptionKey;
-      if (!userToken || !encryptionKey) {
-        return rejectLogin(new Error("Verification did not return a session."));
-      }
-      resolveLogin({ userToken, encryptionKey });
-    },
-  );
+  try {
+    let resolveLogin!: (s: Session) => void;
+    let rejectLogin!: (e: Error) => void;
+    const loginDone = new Promise<Session>((res, rej) => {
+      resolveLogin = res;
+      rejectLogin = rej;
+    });
 
-  const deviceId = await sdk.getDeviceId();
-  const tok = await emailLoginStart({ data: { email, deviceId } });
-  sdk.updateConfigs({
-    appSettings: { appId: APP_ID },
-    loginConfigs: {
-      deviceToken: tok.deviceToken,
-      deviceEncryptionKey: tok.deviceEncryptionKey,
-      otpToken: tok.otpToken,
-    },
-  });
-  sdk.verifyOtp();
+    if (typeof document !== "undefined") {
+      const existingRoot = document.getElementById("circle-w3s-root");
+      if (existingRoot) existingRoot.remove();
+    }
 
-  const session = await loginDone;
+    const sdk: W3S = new W3SSdk(
+      { appSettings: { appId: APP_ID } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (error: any, result: any) => {
+        if (error) {
+          const rawMsg = error?.message || "Email verification failed.";
+          const isCancel =
+            rawMsg.toLowerCase().includes("cancel") ||
+            rawMsg.toLowerCase().includes("close") ||
+            rawMsg.toLowerCase().includes("dismiss");
+          return rejectLogin(new Error(isCancel ? "Verification was cancelled by user." : rawMsg));
+        }
+        const userToken = result?.userToken ?? result?.data?.userToken;
+        const encryptionKey = result?.encryptionKey ?? result?.data?.encryptionKey;
+        if (!userToken || !encryptionKey) {
+          return rejectLogin(new Error("Verification did not return a session."));
+        }
+        resolveLogin({ userToken, encryptionKey });
+      },
+    );
 
-  // 2) Get the wallet ID
-  const list = await listUserWallets({ data: { userToken: session.userToken } });
-  if (!list.id) {
-    throw new Error("Could not locate your wallet ID.");
-  }
+    const deviceId = await sdk.getDeviceId();
+    const tok = await emailLoginStart({ data: { email, deviceId } });
+    sdk.updateConfigs({
+      appSettings: { appId: APP_ID },
+      loginConfigs: {
+        deviceToken: tok.deviceToken,
+        deviceEncryptionKey: tok.deviceEncryptionKey,
+        otpToken: tok.otpToken,
+      },
+    });
 
-  // 3) Create the withdrawal transaction (yields a challengeId)
-  const tx = await createWithdrawalTransaction({
-    data: {
+    toast.loading("Email verification code sent. Please enter the code in the secure window.", {
+      id: tid,
+    });
+    sdk.verifyOtp();
+
+    const session = await loginDone;
+
+    // 2) Create the withdrawal transaction (yields a challengeId)
+    toast.loading("Email verified! Generating secure payment challenge...", { id: tid });
+    const tx = await createWithdrawalTransaction({
+      data: {
+        userToken: session.userToken,
+        recipientAddress,
+        amount,
+      },
+    });
+
+    if (!tx.challengeId) {
+      throw new Error("Failed to generate withdrawal challenge.");
+    }
+
+    // Clean up the first SDK's container to ensure the PIN keyboard renders on a fresh iframe
+    if (typeof document !== "undefined") {
+      const existingRoot = document.getElementById("circle-w3s-root");
+      if (existingRoot) existingRoot.remove();
+    }
+
+    // 4) Execute the challenge (PIN verification prompt) using a fresh SDK instance to avoid state pollution
+    const sdkChallenge = new W3SSdk({ appSettings: { appId: APP_ID } });
+    sdkChallenge.setAuthentication({
       userToken: session.userToken,
-      walletId: list.id,
-      recipientAddress,
-      amount,
-    },
-  });
+      encryptionKey: session.encryptionKey,
+    });
 
-  if (!tx.challengeId) {
-    throw new Error("Failed to generate withdrawal challenge.");
+    toast.loading("Keypad loading. Please enter your secure PIN when the keyboard pops up.", {
+      id: tid,
+    });
+    await runChallenge(sdkChallenge, tx.challengeId);
+    toast.success("Transaction authorized successfully!", { id: tid });
+  } catch (err) {
+    toast.dismiss(tid);
+    throw err;
   }
-
-  // 4) Execute the challenge (PIN verification prompt) using a fresh SDK instance to avoid state pollution
-  const sdkChallenge = new W3SSdk({ appSettings: { appId: APP_ID } });
-  sdkChallenge.setAuthentication({
-    userToken: session.userToken,
-    encryptionKey: session.encryptionKey,
-  });
-  await runChallenge(sdkChallenge, tx.challengeId);
 }
