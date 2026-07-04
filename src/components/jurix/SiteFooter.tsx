@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+
 export function SiteFooter() {
   return (
     <footer className="border-t border-border mt-24 py-12 px-6">
@@ -10,6 +12,9 @@ export function SiteFooter() {
             <span className="size-1.5 rounded-full bg-accent" />
             Built on Arc · Paid in USDC
           </span>
+          <Link to="/docs" className="hover:text-foreground transition-colors">
+            Docs
+          </Link>
           <a
             href="https://github.com/comzzy-comzzy/jurixai"
             target="_blank"

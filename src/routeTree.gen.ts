@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as HackathonsRouteImport } from './routes/hackathons'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ const ProfileRoute = ProfileRouteImport.update({
 const HackathonsRoute = HackathonsRouteImport.update({
   id: '/hackathons',
   path: '/hackathons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CreateRoute = CreateRouteImport.update({
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
+  '/docs': typeof DocsRoute
   '/hackathons': typeof HackathonsRouteWithChildren
   '/profile': typeof ProfileRoute
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
+  '/docs': typeof DocsRoute
   '/profile': typeof ProfileRoute
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
   '/hackathons': typeof HackathonsIndexRoute
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/create': typeof CreateRoute
+  '/docs': typeof DocsRoute
   '/hackathons': typeof HackathonsRouteWithChildren
   '/profile': typeof ProfileRoute
   '/api/judge-deadlines': typeof ApiJudgeDeadlinesRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/create'
+    | '/docs'
     | '/hackathons'
     | '/profile'
     | '/api/judge-deadlines'
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/create'
+    | '/docs'
     | '/profile'
     | '/api/judge-deadlines'
     | '/hackathons'
@@ -146,6 +157,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/create'
+    | '/docs'
     | '/hackathons'
     | '/profile'
     | '/api/judge-deadlines'
@@ -160,6 +172,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   CreateRoute: typeof CreateRoute
+  DocsRoute: typeof DocsRoute
   HackathonsRoute: typeof HackathonsRouteWithChildren
   ProfileRoute: typeof ProfileRoute
   ApiJudgeDeadlinesRoute: typeof ApiJudgeDeadlinesRoute
@@ -179,6 +192,13 @@ declare module '@tanstack/react-router' {
       path: '/hackathons'
       fullPath: '/hackathons'
       preLoaderRoute: typeof HackathonsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/create': {
@@ -281,6 +301,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   CreateRoute: CreateRoute,
+  DocsRoute: DocsRoute,
   HackathonsRoute: HackathonsRouteWithChildren,
   ProfileRoute: ProfileRoute,
   ApiJudgeDeadlinesRoute: ApiJudgeDeadlinesRoute,

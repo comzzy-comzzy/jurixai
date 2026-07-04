@@ -8,6 +8,7 @@ import logoUrl from "@/assets/jurixai-logo.png";
 const NAV = [
   { to: "/hackathons", label: "Browse" },
   { to: "/create", label: "Host" },
+  { to: "/docs", label: "Docs" },
   { to: "/profile", label: "Dashboard" },
 ] as const;
 
@@ -86,8 +87,7 @@ export function TerminalNav() {
                 onClick={() => setOpen(false)}
                 className="border-b border-border/60 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 activeProps={{
-                  className:
-                    "border-b border-border/60 py-3 text-sm font-semibold text-foreground",
+                  className: "border-b border-border/60 py-3 text-sm font-semibold text-foreground",
                 }}
               >
                 {item.label}
