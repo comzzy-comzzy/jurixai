@@ -13,6 +13,8 @@ import {
   Video,
   Plus,
   Users,
+  MapPin,
+  Globe,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -38,6 +40,7 @@ function ProfileRoute() {
   const [website, setWebsite] = useState("");
   const [payoutEvmAddress, setPayoutEvmAddress] = useState("");
   const [payoutChain, setPayoutChain] = useState("");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const [joinedSubmissions, setJoinedSubmissions] = useState<any[]>([]);
   const [loadingJoined, setLoadingJoined] = useState(false);
@@ -147,75 +150,146 @@ function ProfileRoute() {
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         {/* Public profile */}
         <div className="rounded-2xl border border-border bg-card p-7 shadow-sm">
-          <h2 className="text-lg font-bold tracking-tight">Public profile</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            How builders and judges see you across JuriXAI.
-          </p>
-
-          <form
-            className="mt-6 space-y-5"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              try {
-                await saveProfile({
-                  displayName,
-                  bio,
-                  location,
-                  website,
-                  payoutEvmAddress,
-                  payoutChain,
-                });
-                toast.success("Profile saved");
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Failed to save profile.");
-              }
-            }}
-          >
-            <Field label="Display name">
-              <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Your name or team name"
-                className={inputClass}
-              />
-            </Field>
-
-            <Field label="Bio">
-              <Textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell builders and judges who you are."
-                className="min-h-28 rounded-xl"
-              />
-            </Field>
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <Field label="Location">
-                <input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Berlin, Lagos, Remote"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Website">
-                <input
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  placeholder="https://..."
-                  className={inputClass}
-                />
-              </Field>
+          <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-5">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight">Public profile</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                How builders and judges see you across JuriXAI.
+              </p>
             </div>
+            {!isEditingProfile && (
+              <button
+                type="button"
+                onClick={() => setIsEditingProfile(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
+              >
+                <Edit3 className="size-3.5" /> Edit profile
+              </button>
+            )}
+          </div>
 
-            <button
-              type="submit"
-              disabled={profileBusy}
-              className="inline-flex rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+          {!isEditingProfile ? (
+            <div className="space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="size-12 shrink-0 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-lg border border-accent/20">
+                  {(displayName || wallet.identifier || "A").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-foreground">
+                    {displayName || "Anonymous Builder"}
+                  </h3>
+                  {bio ? (
+                    <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                      {bio}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted-foreground italic">No bio has been added yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {(location || website) && (
+                <div className="pt-4 border-t border-border/60 flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                  {location && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin className="size-3.5" /> {location}
+                    </span>
+                  )}
+                  {website && (
+                    <a
+                      href={website.startsWith("http") ? website : `https://${website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                    >
+                      <Globe className="size-3.5" /> {website.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <form
+              className="space-y-5"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                try {
+                  await saveProfile({
+                    displayName,
+                    bio,
+                    location,
+                    website,
+                    payoutEvmAddress,
+                    payoutChain,
+                  });
+                  toast.success("Profile saved");
+                  setIsEditingProfile(false);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Failed to save profile.");
+                }
+              }}
             >
-              {profileBusy ? "Saving…" : "Save profile"}
-            </button>
-          </form>
+              <Field label="Display name">
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Your name or team name"
+                  className={inputClass}
+                />
+              </Field>
+
+              <Field label="Bio">
+                <Textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Tell builders and judges who you are."
+                  className="min-h-28 rounded-xl"
+                />
+              </Field>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <Field label="Location">
+                  <input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Berlin, Lagos, Remote"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Website">
+                  <input
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    placeholder="https://..."
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={profileBusy}
+                  className="inline-flex rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
+                >
+                  {profileBusy ? "Saving…" : "Save profile"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDisplayName(profile?.displayName ?? "");
+                    setBio(profile?.bio ?? "");
+                    setLocation(profile?.location ?? "");
+                    setWebsite(profile?.website ?? "");
+                    setIsEditingProfile(false);
+                  }}
+                  className="inline-flex rounded-lg border border-border bg-transparent px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Side: wallet + payout */}
