@@ -8,8 +8,8 @@ import logoUrl from "@/assets/jurixai-logo.png";
 const NAV = [
   { to: "/hackathons", label: "Browse" },
   { to: "/create", label: "Host" },
-  { to: "/docs", label: "Docs" },
   { to: "/profile", label: "Dashboard" },
+  { to: "/docs", label: "Docs" },
 ] as const;
 
 export function TerminalNav() {
