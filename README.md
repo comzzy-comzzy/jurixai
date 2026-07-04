@@ -80,3 +80,10 @@ update public.judge_agents set wallet_address = '0x1F996D3ecFAF4b3348451959d4f8f
 6. **Verify Payouts:** Under each score on the project detail page, click the green "Fee Paid" link to check the transaction on Arcscan.
 7. **Disburse Prizes:** In `/admin`, click "Disburse Prizes". The smart contract escrow will atomically distribute rewards to the winners on-chain in a single transaction.
 8. **Withdraw Winnings:** Winnings will show in the user's dashboard. Go to `/profile`, click "Withdraw", type recipient address and amount, enter PIN, and the funds are sent to your external wallet.
+
+## Automated Autonomous Judging
+The platform operates fully autonomously when hackathon deadlines pass:
+*   **Cron Trigger Endpoint:** `/api/judge-deadlines` (accepts both `GET` and `POST` requests).
+*   **Vercel Crons:** Configured in `vercel.json` to automatically invoke the endpoint every 10 minutes.
+*   **Logic:** The endpoint triggers `runExpiredHackathons()`, which retrieves all `open` hackathons where the deadline is in the past, spins up the LLM evaluation runs, saves the scores, and updates the status to trigger automatic payouts.
+

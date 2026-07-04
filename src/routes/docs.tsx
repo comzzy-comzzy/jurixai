@@ -1324,6 +1324,18 @@ function DocsPage() {
                     If the organizer deletes the hackathon before the deadline, the system triggers the contract's on-chain <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">cancelAndRefund</code> function, returning 100% of the prize pool USDC back to the hoster's profile account. Once results are judged, payouts are disbursed to the winners' smart accounts atomically in a single contract call.
                   </p>
                 </div>
+
+                {/* Q5 */}
+                <div className="border border-border rounded-xl p-5 bg-card space-y-2">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-accent" />
+                    How are hackathon deadlines monitored autonomously?
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    JuriXAI exposes a dedicated API endpoint at <code className="bg-accent/15 px-1.5 py-0.5 rounded text-accent font-mono text-[10px]">/api/judge-deadlines</code>. 
+                    A Vercel Cron Job is scheduled to ping this endpoint every 10 minutes. When triggered, it scans for open hackathons whose deadlines have passed, runs the AI evaluation in concurrent batches, commits scores, and opens the hackathon for payout disbursement.
+                  </p>
+                </div>
               </div>
             </div>
           )}
