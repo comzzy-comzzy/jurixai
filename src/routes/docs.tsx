@@ -23,6 +23,7 @@ import {
   FileText,
   Clock,
   Sparkles,
+  Info,
 } from "lucide-react";
 
 export const Route = createFileRoute("/docs")({
@@ -469,6 +470,21 @@ function DocsPage() {
                 prevents a single model from getting overwhelmed by conflicting requirements (e.g.
                 balancing raw architectural complexity vs. clean UI layouts).
               </p>
+
+              <div className="rounded-xl border border-border bg-muted/40 p-4 text-xs text-muted-foreground flex gap-3 items-start my-4 animate-slide-in">
+                <Info className="size-4 shrink-0 text-accent mt-0.5" />
+                <div>
+                  <strong className="text-foreground block mb-0.5">
+                    Customizable Criteria vs. Global Baseline
+                  </strong>
+                  The percentages shown below (35%, 25%, 20%, 20%) represent the system-wide
+                  baseline weight profiles for the individual agents. However, JuriXAI allows
+                  hackathon hosts to fully customize criteria weights (such as a 30%/30%/20%/20%
+                  split) when creating an event. The leaderboard standing and composite score are
+                  dynamically calculated based on the specific criteria weights defined by the host,
+                  not the global agent defaults.
+                </div>
+              </div>
 
               {/* Grid of 4 Judges */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
