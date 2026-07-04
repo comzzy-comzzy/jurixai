@@ -1,7 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownToLine, ArrowUpRight, Copy, RefreshCw, Wallet, Edit3, Github, ExternalLink, Video, Plus, Users } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpRight,
+  Copy,
+  RefreshCw,
+  Wallet,
+  Edit3,
+  Github,
+  ExternalLink,
+  Video,
+  Plus,
+  Users,
+} from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWallet } from "@/lib/circle/useWallet";
@@ -319,7 +331,9 @@ function BalanceCard({
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recipient.trim()) {
-      toast.error("Withdrawal Address required", { description: "Please enter a destination EVM address." });
+      toast.error("Withdrawal Address required", {
+        description: "Please enter a destination EVM address.",
+      });
       return;
     }
     const val = Number(amount);
@@ -328,28 +342,34 @@ function BalanceCard({
       return;
     }
     if (balance !== null && val > balance) {
-      toast.error("Insufficient balance", { description: `Your maximum withdrawable balance is ${balance} USDC.` });
+      toast.error("Insufficient balance", {
+        description: `Your maximum withdrawable balance is ${balance} USDC.`,
+      });
       return;
     }
 
     setWithdrawing(true);
-    toast.info("Initiating withdrawal...", { description: "We will trigger an email verification OTP to authenticate you." });
+    toast.info("Initiating withdrawal...", {
+      description: "We will trigger an email verification OTP to authenticate you.",
+    });
     try {
       const { executeWithdrawal } = await import("@/lib/circle/userWallet");
       await executeWithdrawal(email, recipient.trim(), val);
-      toast.success("Withdrawal initiated!", { 
+      toast.success("Withdrawal initiated!", {
         description: `Successfully sent ${val} USDC to ${recipient.trim()}. Balance will update once confirmed on-chain.`,
-        duration: 6000 
+        duration: 6000,
       });
       setIsWithdrawOpen(false);
       setAmount("");
-      
+
       // Wait 4 seconds for the transaction to be mined on Arc Testnet before reloading balance
       setTimeout(() => {
         void load();
       }, 4000);
     } catch (err) {
-      toast.error("Withdrawal failed", { description: err instanceof Error ? err.message : "An error occurred." });
+      toast.error("Withdrawal failed", {
+        description: err instanceof Error ? err.message : "An error occurred.",
+      });
     } finally {
       setWithdrawing(false);
     }
@@ -375,10 +395,14 @@ function BalanceCard({
           </div>
           <div className="mt-3 flex items-end gap-2">
             <span className="text-4xl font-bold tracking-tight tabular-nums">
-              {loading ? "—" : failed ? "—" : (balance ?? 0).toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              {loading
+                ? "—"
+                : failed
+                  ? "—"
+                  : (balance ?? 0).toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
             </span>
             <span className="mb-1 text-sm font-semibold text-muted-foreground">USDC</span>
           </div>
@@ -409,7 +433,9 @@ function BalanceCard({
       {/* Deposit Dialog with QR Code and Copy Address */}
       <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogTitle className="text-xl font-bold tracking-tight italic text-center">Receive USDC</DialogTitle>
+          <DialogTitle className="text-xl font-bold tracking-tight italic text-center">
+            Receive USDC
+          </DialogTitle>
           <div className="mt-4 flex flex-col items-center gap-5">
             {/* QR Code Container */}
             <div className="rounded-xl border border-border bg-white p-3 shadow-inner">
@@ -421,10 +447,11 @@ function BalanceCard({
                 className="size-44 object-contain"
               />
             </div>
-            
+
             {/* Instructions */}
             <p className="text-center text-xs text-muted-foreground leading-relaxed max-w-[280px]">
-              Scan this code to send **USDC** (or native gas tokens) on **Arc Testnet** to your smart wallet.
+              Scan this code to send **USDC** (or native gas tokens) on **Arc Testnet** to your
+              smart wallet.
             </p>
 
             {/* Address Row */}
@@ -448,9 +475,12 @@ function BalanceCard({
       {/* Withdraw Dialog */}
       <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
         <DialogContent className="sm:max-w-[425px]">
-          <DialogTitle className="text-xl font-bold tracking-tight italic">Withdraw USDC</DialogTitle>
+          <DialogTitle className="text-xl font-bold tracking-tight italic">
+            Withdraw USDC
+          </DialogTitle>
           <p className="text-xs text-muted-foreground -mt-2">
-            Send Arc USDC from your smart wallet to any external EVM address. Requires email verification.
+            Send Arc USDC from your smart wallet to any external EVM address. Requires email
+            verification.
           </p>
           <form onSubmit={handleWithdraw} className="mt-4 space-y-4">
             <div>
@@ -539,7 +569,12 @@ interface EditSubmissionDialogProps {
   onSaved: () => void;
 }
 
-function EditSubmissionDialog({ submission, open, onOpenChange, onSaved }: EditSubmissionDialogProps) {
+function EditSubmissionDialog({
+  submission,
+  open,
+  onOpenChange,
+  onSaved,
+}: EditSubmissionDialogProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -582,9 +617,7 @@ function EditSubmissionDialog({ submission, open, onOpenChange, onSaved }: EditS
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl rounded-2xl p-6 overflow-y-auto max-h-[90vh] bg-card text-card-foreground border border-border">
-        <DialogTitle className="text-xl font-bold tracking-tight">
-          Edit Submission
-        </DialogTitle>
+        <DialogTitle className="text-xl font-bold tracking-tight">Edit Submission</DialogTitle>
         <p className="text-sm text-muted-foreground mt-1">
           Make changes to your project for <strong>{submission.hackathons?.name}</strong>.
         </p>
@@ -731,7 +764,8 @@ function HostedHackathonsList({
         <div>
           <h2 className="text-xl font-bold tracking-tight">Hackathons you host</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Events created from this account. Only you can run judging on them.
+            Events created from this account. Judging triggers automatically when the deadline
+            passes.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -981,4 +1015,3 @@ function JoinedHackathonsList({
     </div>
   );
 }
-
