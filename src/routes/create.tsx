@@ -142,38 +142,58 @@ function CreateHackathon() {
         slugifiedId !== "" &&
         form.organizerName.trim() !== "" &&
         form.organizerEmail.trim() !== "" &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.organizerEmail.trim()) &&
         form.description.trim() !== "" &&
         form.submissionInstructions.trim() !== "" &&
+        form.requiredDeliverables.length > 0 &&
+        form.requiredDeliverables.every((d) => d.trim() !== "") &&
         form.startDate !== "" &&
         form.deadline !== "" &&
         new Date(form.deadline) > new Date(form.startDate)
       );
     }
     if (step === 1) {
-      return splitSum === 100 && Number(form.prizePoolUsdc) > 0;
+      return (
+        splitSum === 100 &&
+        Number(form.prizePoolUsdc) > 0 &&
+        form.winnerSplit.every((v) => v !== "" && Number(v) > 0)
+      );
     }
     if (step === 2) {
-      return totalWeight === 100;
+      return (
+        totalWeight === 100 &&
+        criteria.every((c) => c.name.trim() !== "" && c.description.trim() !== "")
+      );
     }
     return true;
   };
 
   const isFormValid = () => {
     const slugifiedId = form.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-    return (
+    const step0Valid = (
       form.name.trim() !== "" &&
       slugifiedId !== "" &&
       form.organizerName.trim() !== "" &&
       form.organizerEmail.trim() !== "" &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.organizerEmail.trim()) &&
       form.description.trim() !== "" &&
       form.submissionInstructions.trim() !== "" &&
+      form.requiredDeliverables.length > 0 &&
+      form.requiredDeliverables.every((d) => d.trim() !== "") &&
       form.startDate !== "" &&
       form.deadline !== "" &&
-      new Date(form.deadline) > new Date(form.startDate) &&
+      new Date(form.deadline) > new Date(form.startDate)
+    );
+    const step1Valid = (
       splitSum === 100 &&
       Number(form.prizePoolUsdc) > 0 &&
-      totalWeight === 100
+      form.winnerSplit.every((v) => v !== "" && Number(v) > 0)
     );
+    const step2Valid = (
+      totalWeight === 100 &&
+      criteria.every((c) => c.name.trim() !== "" && c.description.trim() !== "")
+    );
+    return step0Valid && step1Valid && step2Valid;
   };
 
   async function handleCreate() {
@@ -191,11 +211,17 @@ function CreateHackathon() {
       if (!form.organizerEmail.trim()) {
         throw new Error("Organizer email is required.");
       }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.organizerEmail.trim())) {
+        throw new Error("Please enter a valid organizer email address.");
+      }
       if (!form.description.trim()) {
         throw new Error("Description is required.");
       }
       if (!form.submissionInstructions.trim()) {
         throw new Error("Submission instructions are required.");
+      }
+      if (form.requiredDeliverables.length === 0 || form.requiredDeliverables.some((d) => !d.trim())) {
+        throw new Error("All required deliverables must be filled out.");
       }
       if (!form.startDate) {
         throw new Error("Start date is required.");
@@ -206,8 +232,14 @@ function CreateHackathon() {
       if (new Date(form.deadline) <= new Date(form.startDate)) {
         throw new Error("Submission deadline must be after the start date.");
       }
+      if (form.winnerSplit.some((v) => v === "" || Number(v) <= 0)) {
+        throw new Error("All winner split percentages must be greater than 0%.");
+      }
       if (splitSum !== 100) {
         throw new Error("Winner split must sum to exactly 100%.");
+      }
+      if (criteria.some((c) => !c.name.trim() || !c.description.trim())) {
+        throw new Error("All criteria names and descriptions for the AI agents must be filled out.");
       }
       if (totalWeight !== 100) {
         throw new Error("Judging criteria weights must sum to exactly 100%.");
@@ -432,6 +464,9 @@ function CreateHackathon() {
               onChange={(value) => setForm({ ...form, organizerEmail: value })}
               required
             />
+            {form.organizerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.organizerEmail.trim()) && (
+              <p className="text-xs text-warn -mt-4">Please enter a valid email address.</p>
+            )}
             <Field
               label="Description"
               value={form.description}
@@ -465,6 +500,9 @@ function CreateHackathon() {
                   />
                 ))}
               </div>
+              {form.requiredDeliverables.some((d) => !d.trim()) && (
+                <p className="text-xs text-warn mt-1.5">All required deliverables must be filled out.</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <Field
@@ -618,6 +656,9 @@ function CreateHackathon() {
               >
                 + Add Rank
               </button>
+              {form.winnerSplit.some((v) => v === "" || Number(v) <= 0) && (
+                <p className="text-xs text-warn mt-1.5">Each rank must have a split percentage greater than 0%.</p>
+              )}
             </div>
             <div className="rounded-xl border border-accent/30 bg-accent/5 p-5 text-sm space-y-3">
               <p className="font-semibold text-accent mb-1 text-base">
@@ -676,6 +717,8 @@ function CreateHackathon() {
               >
                 <input
                   value={criterion.name}
+                  placeholder="Criterion name *"
+                  required
                   onChange={(e) =>
                     setCriteria(
                       criteria.map((item, i) =>
@@ -683,7 +726,9 @@ function CreateHackathon() {
                       ),
                     )
                   }
-                  className="col-span-4 bg-transparent border-b border-border px-1 py-1 text-sm font-medium focus:outline-none focus:border-accent"
+                  className={`col-span-4 bg-transparent border-b px-1 py-1 text-sm font-medium focus:outline-none transition-colors ${
+                    criterion.name.trim() === "" ? "border-warn/60 focus:border-warn" : "border-border focus:border-accent"
+                  }`}
                 />
                 <input
                   value={criterion.description}
@@ -694,8 +739,13 @@ function CreateHackathon() {
                       ),
                     )
                   }
-                  placeholder="What this judge should inspect"
-                  className="col-span-4 rounded-lg bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
+                  placeholder="Judge instructions * (compulsory)"
+                  required
+                  className={`col-span-4 rounded-lg bg-background border px-2 py-1.5 text-xs text-foreground focus:outline-none transition-all ${
+                    criterion.description.trim() === ""
+                      ? "border-warn/60 focus:border-warn focus:ring-2 focus:ring-warn/20"
+                      : "border-border focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  }`}
                 />
                 <select
                   value={criterion.agentId}
@@ -728,6 +778,9 @@ function CreateHackathon() {
                 />
               </div>
             ))}
+            {criteria.some((c) => !c.name.trim() || !c.description.trim()) && (
+              <p className="text-xs text-warn mt-1">All criteria names and descriptions must be filled out.</p>
+            )}
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { ScoreBar } from "@/components/jurix/ScoreBar";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
 import { loadSubmissionDetail } from "@/lib/jurix/actions.server";
 import { explorerTx } from "@/lib/chain";
+import { renderFormattedText } from "@/lib/format-text";
 
 export const Route = createFileRoute("/hackathons/$id/project/$projectId")({
   loader: async ({ params }) => {
@@ -89,9 +90,9 @@ function ProjectDetail() {
           <h1 className="mb-4 text-3xl font-bold italic tracking-tight md:text-5xl">
             {project.project_name}
           </h1>
-          <p className="mb-6 text-lg text-muted-foreground text-pretty">
-            {project.description ?? "No project description yet."}
-          </p>
+          <div className="mb-6 text-lg text-muted-foreground text-pretty">
+            {renderFormattedText(project.description) ?? "No project description yet."}
+          </div>
           <div className="flex flex-wrap gap-2 text-sm font-medium">
             {project.github_url && (
               <a
@@ -168,10 +169,10 @@ function ProjectDetail() {
         <div className="space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground">Submission brief</p>
-            <p className="text-sm leading-relaxed text-foreground">
-              {project.hackathon.submission_instructions ??
+            <div className="text-sm leading-relaxed text-foreground">
+              {renderFormattedText(project.hackathon.submission_instructions) ??
                 "No submission instructions were provided."}
-            </p>
+            </div>
           </div>
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground">Required deliverables</p>
@@ -203,9 +204,9 @@ function ProjectDetail() {
               <p className="mb-2 text-xs font-medium text-muted-foreground">
                 Project summary provided by the team
               </p>
-              <p className="text-sm leading-relaxed text-foreground">
-                {project.description ?? "No project description was submitted."}
-              </p>
+              <div className="text-sm leading-relaxed text-foreground">
+                {renderFormattedText(project.description) ?? "No project description was submitted."}
+              </div>
             </div>
             <div>
               <p className="mb-2 text-xs font-medium text-muted-foreground">Submission record</p>

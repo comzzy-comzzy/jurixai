@@ -13,6 +13,7 @@ import { readUsdcBalance } from "@/lib/chain";
 import { RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { renderFormattedText } from "@/lib/format-text";
 
 export const Route = createFileRoute("/hackathons/$id/")({
   loader: async ({ params }) => {
@@ -234,9 +235,9 @@ function HackathonDetail() {
           <h1 className="text-3xl md:text-5xl font-bold italic tracking-tight mb-4">
             {hackathon.name}
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl text-pretty">
-            {hackathon.description ?? "No description has been added yet."}
-          </p>
+          <div className="text-lg text-muted-foreground max-w-2xl text-pretty">
+            {renderFormattedText(hackathon.description) ?? "No description has been added yet."}
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 mt-4 lg:mt-0 shrink-0">
           {isHost && hackathon.status === "open" && (
@@ -447,9 +448,9 @@ function HackathonDetail() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-5">
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Submission brief</p>
-            <p className="text-sm leading-relaxed text-foreground">
-              {hackathon.submission_instructions ?? "No submission instructions were provided."}
-            </p>
+            <div className="text-sm leading-relaxed text-foreground">
+              {renderFormattedText(hackathon.submission_instructions) ?? "No submission instructions were provided."}
+            </div>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Required deliverables</p>

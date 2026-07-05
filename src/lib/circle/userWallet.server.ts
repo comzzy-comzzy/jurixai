@@ -67,10 +67,11 @@ export const provisionWallet = createServerFn({ method: "POST" })
         auth: { persistSession: false, autoRefreshToken: false },
       });
 
+      const emailLower = data.email.trim().toLowerCase();
       const { data: user } = await supabase
         .from("users")
         .select("id")
-        .eq("email", data.email)
+        .eq("email", emailLower)
         .maybeSingle();
 
       if (user) {

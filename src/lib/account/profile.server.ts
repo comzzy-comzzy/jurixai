@@ -38,10 +38,11 @@ async function ensureAccount(input: EnsureAccountInput): Promise<AccountProfile>
   let user: AccountRow | null = null;
 
   if (input.authMethod === "email" && looksLikeEmail(input.identifier)) {
+    const emailLower = input.identifier.trim().toLowerCase();
     const { data, error } = await supabase
       .from("users")
       .select("id, email, display_name, auth_method")
-      .eq("email", input.identifier)
+      .eq("email", emailLower)
       .maybeSingle();
     if (error) throw new Error(error.message);
     user = data as AccountRow | null;
@@ -60,10 +61,13 @@ async function ensureAccount(input: EnsureAccountInput): Promise<AccountProfile>
   }
 
   if (!user) {
+    const emailValue = input.authMethod === "email" && looksLikeEmail(input.identifier) 
+      ? input.identifier.trim().toLowerCase() 
+      : null;
     const { data, error } = await supabase
       .from("users")
       .insert({
-        email: input.authMethod === "email" && looksLikeEmail(input.identifier) ? input.identifier : null,
+        email: emailValue,
         display_name: input.authMethod === "passkey" ? input.identifier : null,
         auth_method: input.authMethod,
       })

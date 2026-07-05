@@ -199,7 +199,7 @@ export function AccountButton() {
                   setOpen(false);
                   const tid = toast.loading("Sending verification email...");
                   try {
-                    await loginEmail(email.trim(), (status: string) => {
+                    await loginEmail(email.trim().toLowerCase(), (status: string) => {
                       if (status === "awaiting_otp") {
                         toast.loading("Email sent! Enter the verification code in the popup...", { id: tid });
                       } else if (status === "verifying_wallet") {
