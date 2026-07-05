@@ -77,16 +77,21 @@ async function ensureAccount(input: EnsureAccountInput): Promise<AccountProfile>
     user = data as AccountRow;
   }
 
-  const { error: walletError } = await supabase.from("wallets").upsert(
-    {
-      user_id: user.id,
-      smart_account: input.walletAddress,
-      blockchain: input.walletChain,
-      is_primary: true,
-    },
-    { onConflict: "user_id,smart_account" },
-  );
-  if (walletError) throw new Error(walletError.message);
+  // Prevent upserting empty or invalid wallet addresses (e.g. if Circle SDK failed or timed out on client)
+  if (input.walletAddress && /^0x[a-fA-F0-9]{40}$/.test(input.walletAddress.trim())) {
+    const { error: walletError } = await supabase.from("wallets").upsert(
+      {
+        user_id: user.id,
+        smart_account: input.walletAddress.trim(),
+        blockchain: input.walletChain,
+        is_primary: true,
+      },
+      { onConflict: "user_id,smart_account" },
+    );
+    if (walletError) throw new Error(walletError.message);
+  } else {
+    console.warn(`[profile.server] Skipped wallet upsert: Invalid or missing wallet address "${input.walletAddress}"`);
+  }
 
   const { data: existingProfile, error: profileError } = await supabase
     .from("user_profiles")
