@@ -139,7 +139,17 @@ export const createHackathon = createServerFn({ method: "POST" })
     const { error: criteriaError } = await supabase.from("judging_criteria").insert(criteria);
     if (criteriaError) throw new Error(criteriaError.message);
 
-    // Register on the master JuriXEscrow smart contract
+    // Register on the master JuriXEscrow smart contract.
+    //
+    // IMPORTANT: the on-chain step must NEVER delete the hackathon. By the time
+    // we get here the host has already paid the funding into the operator wallet,
+    // and the event + judging criteria are saved. If the escrow relay/registration
+    // reverts, deleting the record would make the host's hackathon (and their
+    // money) silently vanish — the exact "it keeps disappearing" bug. Instead we
+    // keep the record, flag escrow as not-yet-registered, and let it be retried.
+    let escrowRegistered = false;
+    let escrowTxHash: string | null = null;
+    let escrowError: string | null = null;
     try {
       const durationDays =
         data.start_date && data.deadline
@@ -161,19 +171,44 @@ export const createHackathon = createServerFn({ method: "POST" })
       console.log(
         `[escrow] Registering hackathon ${created.id} on-chain with hoster: ${hosterAddress}, prize pool: ${data.prize_pool_usdc} USDC, platform fee: ${platformFee} USDC`,
       );
-      await registerHackathonOnChain(created.id, hosterAddress, data.prize_pool_usdc, platformFee);
+      const txHash = await registerHackathonOnChain(
+        created.id,
+        hosterAddress,
+        data.prize_pool_usdc,
+        platformFee,
+      );
+      escrowRegistered = true;
+      escrowTxHash = typeof txHash === "string" ? txHash : null;
     } catch (e) {
-      console.error("[escrow] On-chain registration failed, rolling back Supabase records:", e);
-      // Clean up Supabase records to prevent ghost entries
-      await supabase.from("judging_criteria").delete().eq("hackathon_id", created.id);
-      await supabase.from("hackathons").delete().eq("id", created.id);
-
-      throw new Error(
-        `Failed to register hackathon escrow on-chain: ${e instanceof Error ? e.message : String(e)}`,
+      escrowError = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[escrow] On-chain registration failed for ${created.id}; keeping the hackathon in the database for retry:`,
+        e,
       );
     }
 
-    return { id: created.id };
+    // Best-effort persistence of the escrow outcome. Wrapped so that a missing
+    // column (migration 0006 not yet applied) can never break hosting.
+    try {
+      const { error: escrowStatusError } = await supabase
+        .from("hackathons")
+        .update({
+          escrow_registered: escrowRegistered,
+          escrow_tx_hash: escrowTxHash,
+          escrow_error: escrowError,
+        })
+        .eq("id", created.id);
+      if (escrowStatusError) {
+        console.warn(
+          "[escrow] Could not persist escrow status (is migration 0006 applied?):",
+          escrowStatusError.message,
+        );
+      }
+    } catch (e) {
+      console.warn("[escrow] Unexpected error persisting escrow status:", e);
+    }
+
+    return { id: created.id, escrowRegistered };
   });
 
 type UpdateSubmissionInput = {

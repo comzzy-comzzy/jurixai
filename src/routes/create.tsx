@@ -374,7 +374,12 @@ function CreateHackathon() {
         },
       });
 
-      toast.success("Hackathon successfully deployed and funded!", { id: tid });
+      toast.success(
+        result.escrowRegistered
+          ? "Hackathon successfully deployed and funded!"
+          : "Hackathon created. On-chain escrow registration is pending and will be retried — your event is saved.",
+        { id: tid },
+      );
       setActiveChallengeId(null);
       setActiveSession(null);
       setActiveFundingAmount(null);
