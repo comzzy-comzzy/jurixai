@@ -410,6 +410,17 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
   if (!hasSupabaseServerConfig()) return [];
 
   const supabase = getSupabaseServerClient();
+  
+  // Fetch judge agent wallet addresses to differentiate agent fee payouts
+  const { data: agentsData } = await supabase
+    .from("judge_agents")
+    .select("wallet_address");
+  const agentWallets = new Set(
+    (agentsData ?? [])
+      .map((a) => String(a.wallet_address || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   const { data, error } = await supabase
     .from("hackathons")
     .select("*")
@@ -419,9 +430,27 @@ export async function listHackathons(): Promise<HackathonSummary[]> {
 
   const ids = (data ?? []).map((row) => String(row.id));
   const counts = await fetchSubmissionCounts(ids);
-  return (data ?? []).map((row) =>
-    normalizeHackathon(row as Record<string, unknown>, counts.get(String(row.id)) ?? 0),
-  );
+
+  // Fetch all payout payments for these hackathons
+  const { data: paymentsData } = await supabase
+    .from("payments")
+    .select("hackathon_id, to_address")
+    .eq("kind", "payout")
+    .in("hackathon_id", ids);
+
+  const disbursedHackathons = new Set<string>();
+  for (const p of paymentsData ?? []) {
+    const toAddr = String(p.to_address || "").trim().toLowerCase();
+    if (toAddr && !agentWallets.has(toAddr)) {
+      disbursedHackathons.add(String(p.hackathon_id));
+    }
+  }
+
+  return (data ?? []).map((row) => {
+    const summary = normalizeHackathon(row as Record<string, unknown>, counts.get(String(row.id)) ?? 0);
+    summary.prizes_disbursed = disbursedHackathons.has(summary.id);
+    return summary;
+  });
 }
 
 export async function getHackathonDetail(id: string): Promise<HackathonDetail | null> {
@@ -433,6 +462,7 @@ export async function getHackathonDetail(id: string): Promise<HackathonDetail | 
     { data: criteria, error: criteriaError },
     { data: agents, error: agentsError },
     { data: submissions, error: submissionsError },
+    { data: payments, error: paymentsError },
   ] = await Promise.all([
     supabase.from("hackathons").select("*").eq("id", id).maybeSingle(),
     supabase.from("judging_criteria").select("*").eq("hackathon_id", id).order("sort_order"),
@@ -442,13 +472,30 @@ export async function getHackathonDetail(id: string): Promise<HackathonDetail | 
       .select("*")
       .eq("hackathon_id", id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("payments")
+      .select("to_address")
+      .eq("hackathon_id", id)
+      .eq("kind", "payout"),
   ]);
 
   if (hackathonError) throw new Error(hackathonError.message);
   if (criteriaError) throw new Error(criteriaError.message);
   if (agentsError) throw new Error(agentsError.message);
   if (submissionsError) throw new Error(submissionsError.message);
+  if (paymentsError) throw new Error(paymentsError.message);
   if (!hackathon) return null;
+
+  const agentWallets = new Set(
+    (agents ?? [])
+      .map((a) => String(a.wallet_address || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const prizesDisbursed = (payments ?? []).some((p) => {
+    const toAddr = String(p.to_address || "").trim().toLowerCase();
+    return toAddr && !agentWallets.has(toAddr);
+  });
 
   const submissionIds = (submissions ?? []).map((row) => String(row.id));
   const weighted = await fetchWeightedScores(submissionIds);
@@ -463,8 +510,11 @@ export async function getHackathonDetail(id: string): Promise<HackathonDetail | 
       ? (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>))
       : FALLBACK_AGENTS;
 
+  const summary = normalizeHackathon(hackathon as Record<string, unknown>, submissionList.length);
+  summary.prizes_disbursed = prizesDisbursed;
+
   return {
-    ...normalizeHackathon(hackathon as Record<string, unknown>, submissionList.length),
+    ...summary,
     criteria: (criteria ?? []).map((row) => normalizeCriterion(row as Record<string, unknown>)),
     agents: normalizedAgents,
     submissions: submissionList,

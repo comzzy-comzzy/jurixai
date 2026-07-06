@@ -48,6 +48,7 @@ export interface HackathonSummary {
   created_at: string;
   submission_count: number;
   host_user_id?: string | null;
+  prizes_disbursed?: boolean;
 }
 
 export interface SubmissionScore {

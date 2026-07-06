@@ -1,5 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { toast } from "sonner";
 import {
@@ -37,6 +36,7 @@ export const Route = createFileRoute("/admin")({
 
 function Admin() {
   const { hackathons, home, admin } = Route.useLoaderData();
+  const router = useRouter();
   const [authed, setAuthed] = useState(admin.authed);
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
@@ -232,7 +232,7 @@ function Admin() {
                             >
                               {busyId === hackathon.id ? "Running…" : "Run judging"}
                             </button>
-                          ) : hackathon.status === "closed" ? (
+                          ) : hackathon.status === "closed" && !hackathon.prizes_disbursed ? (
                             <button
                               type="button"
                               disabled={busyId === hackathon.id}
@@ -247,6 +247,7 @@ function Admin() {
                                     description: `Successfully disbursed rewards to ${res.paidCount} winners on-chain.`,
                                     duration: 8000,
                                   });
+                                  router.invalidate();
                                 } catch (error) {
                                   const errMsg =
                                     error instanceof Error
@@ -648,6 +649,7 @@ function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
   const [busy, setBusy] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [payouts, setPayouts] = useState<any[] | null>(null);
+  const router = useRouter();
 
   const handleDisburse = async () => {
     setBusy(true);
@@ -658,6 +660,7 @@ function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
           description: `Successfully disbursed prize rewards to ${res.paidCount} winners on-chain.`,
         });
         setPayouts(res.payouts);
+        router.invalidate();
       }
     } catch (e) {
       toast.error("Distribution Failed", {
@@ -676,14 +679,16 @@ function PrizeDisbursmentPanel({ hackathon }: { hackathon: HackathonSummary }) {
           the top projects according to the configured reward split (
           {hackathon.winner_split?.join(" / ")}%).
         </p>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={handleDisburse}
-          className="shrink-0 rounded-lg bg-accent text-accent-foreground px-4 py-2 text-xs font-semibold shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
-        >
-          {busy ? "Disbursing..." : "Disburse Rewards ↗"}
-        </button>
+        {!hackathon.prizes_disbursed && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleDisburse}
+            className="shrink-0 rounded-lg bg-accent text-accent-foreground px-4 py-2 text-xs font-semibold shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {busy ? "Disbursing..." : "Disburse Rewards ↗"}
+          </button>
+        )}
       </div>
 
       {payouts && payouts.length > 0 && (
