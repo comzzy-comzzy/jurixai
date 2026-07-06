@@ -255,14 +255,23 @@ export async function emailSignIn(
   let address = prov.address ?? "";
   if (!address && prov.challengeId) {
     onStatusUpdate?.("awaiting_pin");
-    sdk.setAuthentication({
+
+    if (typeof document !== "undefined") {
+      const existingRoot = document.getElementById("circle-w3s-root");
+      if (existingRoot) existingRoot.remove();
+    }
+
+    const challengeSdk = new W3SSdk({
+      appSettings: { appId: APP_ID },
+    });
+    challengeSdk.setAuthentication({
       userToken: session.userToken,
       encryptionKey: session.encryptionKey,
     });
-    await runChallenge(sdk, prov.challengeId);
+    await runChallenge(challengeSdk, prov.challengeId);
 
     onStatusUpdate?.("polling_address");
-    address = await waitForWalletAddress(session.userToken);
+    address = await waitForWalletAddress(session.userToken, 45);
   }
 
   if (!address) {
