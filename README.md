@@ -71,6 +71,11 @@ update public.judge_agents set wallet_address = '0x1F996D3ecFAF4b3348451959d4f8f
     ```
 3. Open `http://localhost:3000`.
 
+## 🌐 Browser Compatibility Note (Chrome/Safari/Brave)
+Because Circle's secure wallet SDK relies on cross-origin iframes (`w3s.circle.com`) to manage device authentication and store keys securely:
+*   **Brave Browser (PC):** Works perfectly out-of-the-box on PC. We highly recommend using Brave Browser for a seamless experience.
+*   **Chrome & Safari (PC):** If you experience an "Account/wallet error" or if device registration fails, your browser's **Third-Party Cookie Blocking** settings are likely blocking the SDK from writing to local storage. You can resolve this by allowing third-party cookies for the site in your Chrome/Safari settings.
+
 ## Quick Demo Flow
 1. **Sign In:** Click "Sign In", input email, verify OTP, and set a PIN. This generates your Circle Smart Account (SCA).
 2. **Host a Hackathon:** Go to `/create` (requires login). Set prize splits and details.

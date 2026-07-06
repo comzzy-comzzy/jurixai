@@ -232,12 +232,18 @@ export function AccountButton() {
                     ? "Checking setup…"
                     : "Email me a code"}
               </button>
-              <button
-                onClick={() => setStep("choose")}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="size-3" /> Back
-              </button>
+              <div className="flex justify-between items-center pt-1">
+                <button
+                  onClick={() => setStep("choose")}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <ArrowLeft className="size-3" /> Back
+                </button>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-border bg-muted/30 p-2.5 text-[10px] text-muted-foreground leading-relaxed">
+                💡 <strong>PC Chrome & Safari users:</strong> If you see an "Account/wallet error" or if getDeviceId fails, your browser may be blocking third-party cookies. Please enable third-party cookies in Chrome settings, or use <strong>Brave Browser</strong> for a smooth experience.
+              </div>
             </div>
           )}
 
