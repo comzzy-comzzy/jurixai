@@ -282,7 +282,28 @@ function HackathonDetail() {
         </div>
       </header>
 
-      {hackathon.treasury_address &&
+      {hackathon.prizes_disbursed && (
+        <div className="mb-8 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="font-bold text-emerald-400 flex items-center gap-2 text-base">
+              <span>🏆</span> Hackathon Completed & Disbursed
+            </h3>
+            <p className="text-muted-foreground text-xs leading-relaxed max-w-2xl">
+              This event is successfully completed! AI judging consensus has evaluated all submissions, 
+              and the prize pool has been fully disbursed on-chain to the winners' payout wallets.
+            </p>
+          </div>
+          <div className="flex flex-col items-end shrink-0 text-xs font-mono text-emerald-400">
+            <span className="font-bold uppercase tracking-wider bg-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
+              Completed
+            </span>
+          </div>
+        </div>
+      )}
+
+      {!hackathon.prizes_disbursed &&
+        (hackathon.status === "open" || hackathon.status === "judging") &&
+        hackathon.treasury_address &&
         treasuryBalance !== null &&
         treasuryBalance < requiredEscrowBalance && (
           <div className="mb-8 rounded-xl border border-warn/30 bg-warn/5 p-6 text-sm flex flex-col gap-4">
@@ -363,7 +384,9 @@ function HackathonDetail() {
           </div>
         )}
 
-      {hackathon.treasury_address &&
+      {!hackathon.prizes_disbursed &&
+        (hackathon.status === "open" || hackathon.status === "judging") &&
+        hackathon.treasury_address &&
         treasuryBalance !== null &&
         treasuryBalance >= requiredEscrowBalance && (
           <div className="mb-8 rounded-xl border border-accent/30 bg-accent/5 p-5 text-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
