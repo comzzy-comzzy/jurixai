@@ -240,10 +240,6 @@ export function AccountButton() {
                   <ArrowLeft className="size-3" /> Back
                 </button>
               </div>
-
-              <div className="mt-3 rounded-lg border border-border bg-muted/30 p-2.5 text-[10px] text-muted-foreground leading-relaxed">
-                💡 <strong>PC Chrome & Safari users:</strong> If you see an "Account/wallet error" or if getDeviceId fails, your browser may be blocking third-party cookies. Please enable third-party cookies in Chrome settings, or use <strong>Brave Browser</strong> for a smooth experience.
-              </div>
             </div>
           )}
 
@@ -305,6 +301,10 @@ export function AccountButton() {
             {step === "passkey" ? `Passkey on ${walletChain()}` : `Gasless on ${userWalletChain()}`} ·
             {" "}Secured by Circle
           </p>
+
+          <div className="mt-4 rounded-lg border border-border bg-muted/30 p-2.5 text-[10px] text-muted-foreground leading-relaxed">
+            💡 <strong>PC Chrome & Safari users:</strong> If you see an "Account/wallet error" or if getDeviceId fails, your browser may be blocking third-party cookies. Please enable third-party cookies in Chrome settings, or use <strong>Brave Browser</strong> for a smooth experience.
+          </div>
         </DialogContent>
       </Dialog>
     </>
