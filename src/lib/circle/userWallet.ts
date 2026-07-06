@@ -116,6 +116,8 @@ export async function getEmailSession(email: string): Promise<Session> {
     },
   );
 
+  // Wait 800ms for the SDK iframe to mount and register postMessage listeners before retrieving deviceId
+  await new Promise((r) => setTimeout(r, 800));
   const deviceId = await sdk.getDeviceId();
   const tok = await emailLoginStart({ data: { email, deviceId } });
   sdk.updateConfigs({
@@ -231,6 +233,8 @@ export async function emailSignIn(
     },
   );
 
+  // Wait 800ms for the SDK iframe to mount and register postMessage listeners before retrieving deviceId
+  await new Promise((r) => setTimeout(r, 800));
   const deviceId = await sdk.getDeviceId();
   onStatusUpdate?.("sending_otp");
   const tok = await emailLoginStart({ data: { email, deviceId } });
@@ -331,6 +335,8 @@ export async function executeWithdrawal(
       },
     );
 
+    // Wait 800ms for the SDK iframe to mount and register postMessage listeners before retrieving deviceId
+    await new Promise((r) => setTimeout(r, 800));
     const deviceId = await sdk.getDeviceId();
     const tok = await emailLoginStart({ data: { email, deviceId } });
     sdk.updateConfigs({
