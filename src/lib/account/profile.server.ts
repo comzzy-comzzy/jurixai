@@ -42,7 +42,7 @@ async function ensureAccount(input: EnsureAccountInput): Promise<AccountProfile>
     const { data, error } = await supabase
       .from("users")
       .select("id, email, display_name, auth_method")
-      .eq("email", emailLower)
+      .ilike("email", emailLower)
       .maybeSingle();
     if (error) throw new Error(error.message);
     user = data as AccountRow | null;

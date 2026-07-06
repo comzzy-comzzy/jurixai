@@ -71,7 +71,7 @@ export const provisionWallet = createServerFn({ method: "POST" })
       const { data: user } = await supabase
         .from("users")
         .select("id")
-        .eq("email", emailLower)
+        .ilike("email", emailLower)
         .maybeSingle();
 
       if (user) {
