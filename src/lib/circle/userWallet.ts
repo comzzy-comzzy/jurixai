@@ -58,6 +58,10 @@ async function ensureBrowserGlobals(): Promise<void> {
     const proc = (await import("process/browser")) as { default?: unknown };
     g.process = proc.default ?? proc;
   }
+  const p = g.process as Record<string, unknown> | undefined;
+  if (p && !p.env) {
+    p.env = {};
+  }
 }
 
 // The SDK's types are loose; keep a local alias to avoid `any` sprawl.
@@ -199,6 +203,11 @@ export async function emailSignIn(
     resolveLogin = res;
     rejectLogin = rej;
   });
+
+  if (typeof document !== "undefined") {
+    const existingRoot = document.getElementById("circle-w3s-root");
+    if (existingRoot) existingRoot.remove();
+  }
 
   const sdk: W3S = new W3SSdk(
     { appSettings: { appId: APP_ID } },
