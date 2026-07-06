@@ -1336,6 +1336,17 @@ function DocsPage() {
                     A Vercel Cron Job is scheduled to ping this endpoint every 10 minutes. When triggered, it scans for open hackathons whose deadlines have passed, runs the AI evaluation in concurrent batches, commits scores, and opens the hackathon for payout disbursement.
                   </p>
                 </div>
+
+                {/* Q6 */}
+                <div className="border border-border rounded-xl p-5 bg-card space-y-2">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-accent" />
+                    How does JuriXAI prevent exploits or scoring manipulation?
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    JuriXAI implements several layers of security: (1) <strong>On-chain Escrow</strong> locks the prize pool under smart contract rules that restrict disbursement to verified operators and cap total payouts; (2) <strong>Consensus AI Grading</strong> evaluates projects using a multi-agent panel with strict system prompt caps, making it highly resilient to individual prompt-injection exploits; (3) <strong>Deterministic Offsets</strong> apply hardcoded score penalties for missing or placeholder deliverables, so bad actors cannot bypass requirements; (4) <strong>Human Governance</strong> lets organizers inspect detailed reasoning logs and override scores if an anomaly is detected.
+                  </p>
+                </div>
               </div>
             </div>
           )}
