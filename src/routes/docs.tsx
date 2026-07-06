@@ -1347,6 +1347,17 @@ function DocsPage() {
                     JuriXAI implements several layers of security: (1) <strong>On-chain Escrow</strong> locks the prize pool under smart contract rules that restrict disbursement to verified operators and cap total payouts; (2) <strong>Consensus AI Grading</strong> evaluates projects using a multi-agent panel with strict system prompt caps, making it highly resilient to individual prompt-injection exploits; (3) <strong>Deterministic Offsets</strong> apply hardcoded score penalties for missing or placeholder deliverables, so bad actors cannot bypass requirements; (4) <strong>Human Governance</strong> lets organizers inspect detailed reasoning logs and override scores if an anomaly is detected.
                   </p>
                 </div>
+
+                {/* Q7 */}
+                <div className="border border-border rounded-xl p-5 bg-card space-y-2">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-accent" />
+                    How are the AI judges paid, and why do they charge a workload fee?
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Every AI agent has its own public EVM wallet address on Arc Testnet. Scoring a hackathon project requires significant LLM computation (crawling the repository, parsing code, evaluating, and writing a formatted rationale). To pay for this computation, JuriXAI automatically transfers a dynamic <strong>Workload Fee</strong> (paid in USDC) from the hackathon's escrow/treasury to each agent's wallet address for every project scored. This fee consists of a base connection fee (0.0002 USDC) plus a character-length charge for evaluation payload. You can check the transaction receipts of these agent payments directly via the green explorer links under each score.
+                  </p>
+                </div>
               </div>
             </div>
           )}

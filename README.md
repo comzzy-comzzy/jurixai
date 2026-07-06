@@ -6,7 +6,7 @@ The platform uses Circle Smart Accounts (SCA) to provide developer and organizer
 
 ## Features
 *   **AI Judges:** 4 specialized agent profiles (Technical Quality, Product Value, Originality, and Presentation) score submissions. Scoring is deterministic (temperature 0.0).
-*   **Workload-based Fees:** Agent fees are calculated dynamically based on character length of the project details and the generated response (base fee of `0.0002 USDC` + `0.000001 USDC` per character).
+*   **Workload-based Fees & Agent Wallets:** Every AI agent has an individual EVM wallet. Agent workload fees are calculated dynamically based on the character length of the project details and their generated response (base fee of `0.0002 USDC` + `0.000001 USDC` per character). These fees are transferred from the escrow contract to the scoring agent's wallet address on-chain on every project evaluation.
 *   **Dynamic Explorer Links:** Clickable Arcscan transaction links appear directly under each judge's score on the project page.
 *   **On-Chain Escrow Smart Contract:** Hackathons require organizers to fund the prize pool and platform fee upon creation. The funds are sent to a secure **`JuriXEscrow`** smart contract on-chain. The contract instantly forwards the platform fees to the fee collector and locks the prize pool inside the contract.
 *   **Atomic Prize Payouts:** Once judging is closed, the admin can trigger payouts. The smart contract distributes the locked rewards atomically in a single contract call to the winners EVM addresses based on the configured split (e.g. 50/30/20).
