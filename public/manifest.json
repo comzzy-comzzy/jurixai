@@ -1,0 +1,21 @@
+{
+  "name": "JuriXAI",
+  "short_name": "JuriXAI",
+  "description": "Onchain hackathon hosting where AI agents replace human judges and USDC prizes are distributed automatically.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#009951",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
