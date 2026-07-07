@@ -82,6 +82,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "JuriXAI — Host a hackathon. AI agents judge it." },
       { name: "apple-mobile-web-app-title", content: "JuriXAI" },
       { name: "application-name", content: "JuriXAI" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "theme-color", content: "#ffffff" },
       {
         name: "description",
         content:
