@@ -125,3 +125,39 @@
 @utility animate-slide-in {
   animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* Custom Monad Dark Theme Overrides */
+.monad-theme {
+  --background: #0E091C;
+  --foreground: #FFFFFF;
+  --muted: #150e28;
+  --muted-foreground: #8490b0;
+  --accent: #8B75FF;
+  --ai: #A0055D;
+  --border: #2d2245;
+  --card: #150e28;
+  --card-foreground: #c8d0e8;
+  --primary: #8B75FF;
+  --primary-foreground: #0E091C;
+  --secondary: #1a1236;
+  --secondary-foreground: #c8d0e8;
+  --input: #2d2245;
+  --ring: #8B75FF;
+
+  /* Impeccable Typography */
+  --font-sans: "Albert Sans", sans-serif;
+  --font-mono: "SF Mono", monospace;
+
+  /* Monad scan grids */
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(139, 117, 255, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 0%, rgba(160, 5, 93, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
+  background-color: #0E091C;
+}
+
+/* Make sure selecting text matches Monad theme */
+.monad-theme::selection {
+  background: #8B75FF;
+  color: #0E091C;
+}

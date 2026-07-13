@@ -15,6 +15,7 @@ import { TerminalNav } from "@/components/jurix/TerminalNav";
 import { SiteFooter } from "@/components/jurix/SiteFooter";
 import { Toaster } from "@/components/ui/sonner";
 import { WalletProvider } from "@/lib/circle/useWallet";
+import { CHAIN_NAME } from "@/lib/chain";
 
 function NotFoundComponent() {
   return (
@@ -152,11 +153,12 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const isMonad = CHAIN_NAME.includes("MONAD") || CHAIN_NAME.includes("monad");
 
   return (
     <QueryClientProvider client={queryClient}>
       <WalletProvider>
-        <div className="min-h-screen flex flex-col bg-background text-foreground">
+        <div className={`min-h-screen flex flex-col bg-background text-foreground ${isMonad ? "dark monad-theme" : ""}`}>
           <TerminalNav />
           <main className="flex-1">
             <Outlet />

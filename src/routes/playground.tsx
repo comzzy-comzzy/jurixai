@@ -6,6 +6,7 @@ import {
   Upload, FileText
 } from "lucide-react";
 import { toast } from "sonner";
+import { CHAIN_NAME } from "@/lib/chain";
 
 export const Route = createFileRoute("/playground")({
   component: Playground,
@@ -36,6 +37,10 @@ type AnalysisResult = {
 };
 
 function Playground() {
+  const isMonad = CHAIN_NAME.includes("MONAD") || CHAIN_NAME.includes("monad");
+  const tokenSymbol = isMonad ? "USDC" : "USDT";
+  const networkName = isMonad ? "Monad Mainnet" : "X Layer Mainnet";
+
   const [tab, setTab] = useState<"single" | "batch">("single");
   const [githubUrl, setGithubUrl] = useState("");
   const [rawUrls, setRawUrls] = useState("");
@@ -99,14 +104,14 @@ function Playground() {
   const runSimulatedLogs = async (isLive: boolean, isBatch: boolean, urls: string[]) => {
     const logs = [];
     if (isLive) {
-      logs.push("⏳ Connecting to X Layer RPC node...");
+      logs.push(`⏳ Connecting to ${networkName} RPC node...`);
       setTerminalLogs([...logs]);
       await new Promise(r => setTimeout(r, 600));
       logs.push(`🔍 Checking transaction hash: ${txHash.slice(0, 12)}...`);
       setTerminalLogs([...logs]);
       await new Promise(r => setTimeout(r, 800));
-      logs.push("✅ Payment transaction verified successfully on X Layer Mainnet!");
-      logs.push(`💰 Amount received: ${(urls.length * 0.50).toFixed(2)} USDT`);
+      logs.push(`✅ Payment transaction verified successfully on ${networkName}!`);
+      logs.push(`💰 Amount received: ${(urls.length * 0.50).toFixed(2)} ${tokenSymbol}`);
     } else {
       logs.push("🧪 Running in SANDBOX MODE (Simulated Payment)...");
     }
@@ -201,7 +206,7 @@ function Playground() {
       return;
     }
     if (mode === "live" && !txHash.trim()) {
-      toast.error("Please enter the X Layer USDT payment transaction hash.");
+      toast.error(`Please enter the ${networkName} ${tokenSymbol} payment transaction hash.`);
       return;
     }
 
@@ -336,7 +341,7 @@ function Playground() {
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    X Layer Mainnet (Paid)
+                    {networkName} (Paid)
                   </button>
                 </div>
               </div>
@@ -351,7 +356,7 @@ function Playground() {
                         Micro-payment required to trigger judging:
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-1">
-                        Send exactly <strong className="text-foreground">{dynamicRequiredUsdt} USDT</strong> to the JuriXAI operator address on X Layer Mainnet.
+                        Send exactly <strong className="text-foreground">{dynamicRequiredUsdt} {tokenSymbol}</strong> to the JuriXAI operator address on {networkName}.
                       </p>
                     </div>
                   </div>
@@ -374,7 +379,7 @@ function Playground() {
                     <div className="flex items-center justify-between bg-muted/60 p-2 rounded border border-border/40">
                       <span className="text-[10px] font-mono text-muted-foreground">Total Fee</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono text-foreground">{dynamicRequiredUsdt} USDT</span>
+                        <span className="text-[10px] font-mono text-foreground">{dynamicRequiredUsdt} {tokenSymbol}</span>
                         <button
                           type="button"
                           onClick={handleCopyAmount}

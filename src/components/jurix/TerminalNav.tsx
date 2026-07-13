@@ -6,11 +6,12 @@ import { useWallet } from "@/lib/circle/useWallet";
 import logoUrl from "@/assets/jurixai-logo.png";
 
 const NAV = [
-  { to: "/hackathons", label: "Browse" },
-  { to: "/create", label: "Host" },
-  { to: "/profile", label: "Dashboard" },
-  { to: "/playground", label: "ASP Playground" },
-  { to: "/docs", label: "Docs" },
+  { to: "/hackathons", label: "Browse", isRouter: true },
+  { to: "/create", label: "Host", isRouter: true },
+  { to: "/profile", label: "Dashboard", isRouter: true },
+  { to: "/playground?chain=xlayerMainnet", label: "ASP Playground", isRouter: false },
+  { to: "/playground?chain=monadMainnet", label: "Monad Playground", isRouter: false },
+  { to: "/docs", label: "Docs", isRouter: true },
 ] as const;
 
 export function TerminalNav() {
@@ -45,14 +46,24 @@ export function TerminalNav() {
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-6">
             {NAV.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                activeProps={{ className: "text-sm font-semibold text-foreground" }}
-              >
-                {item.label}
-              </Link>
+              item.isRouter ? (
+                <Link
+                  key={item.to}
+                  to={item.to as any}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  activeProps={{ className: "text-sm font-semibold text-foreground" }}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <a
+                  key={item.to}
+                  href={item.to}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {item.label}
+                </a>
+              )
             ))}
             <a
               href="mailto:jurixai67@gmail.com"
@@ -82,17 +93,28 @@ export function TerminalNav() {
         <div className="md:hidden border-t border-border bg-background">
           <div className="mx-auto flex max-w-7xl flex-col px-6 py-2">
             {NAV.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => setOpen(false)}
-                className="border-b border-border/60 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                activeProps={{
-                  className: "border-b border-border/60 py-3 text-sm font-semibold text-foreground",
-                }}
-              >
-                {item.label}
-              </Link>
+              item.isRouter ? (
+                <Link
+                  key={item.to}
+                  to={item.to as any}
+                  onClick={() => setOpen(false)}
+                  className="border-b border-border/60 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  activeProps={{
+                    className: "border-b border-border/60 py-3 text-sm font-semibold text-foreground",
+                  }}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <a
+                  key={item.to}
+                  href={item.to}
+                  onClick={() => setOpen(false)}
+                  className="border-b border-border/60 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {item.label}
+                </a>
+              )
             ))}
             <a
               href="mailto:jurixai67@gmail.com"
