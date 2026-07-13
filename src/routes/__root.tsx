@@ -138,8 +138,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const isMonad = CHAIN_NAME.includes("MONAD") || CHAIN_NAME.includes("monad");
   return (
-    <html lang="en">
+    <html lang="en" className={isMonad ? "dark monad-theme" : ""}>
       <head>
         <HeadContent />
       </head>
