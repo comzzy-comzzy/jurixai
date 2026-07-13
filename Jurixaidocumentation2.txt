@@ -1,0 +1,144 @@
+=========================================================================================
+                          IGNITES SUBMISSION DOCUMENTATION: JURIXAI
+=========================================================================================
+
+-----------------------------------------------------------------------------------------
+1. PROJECT TITLE
+-----------------------------------------------------------------------------------------
+JuriXAI: Autonomous Agentic Hackathon Judging & Escrow Protocol
+
+
+-----------------------------------------------------------------------------------------
+2. DESCRIPTION
+-----------------------------------------------------------------------------------------
+JuriXAI is an autonomous, on-chain hackathon management and evaluation protocol. It solves 
+the core bottlenecks of traditional hackathons (subjective judging, evaluation fatigue, 
+coordination delays, and slow, manual prize disbursements) by replacing human judges with 
+a panel of specialized, deterministic AI agents and utilizing Circle Smart Accounts (SCA) 
+alongside secure smart-contract escrows.
+
+Core Features & Values:
+- Autonomous AI Judging Panel: Four specialized AI agents (Code Quality, Product Value, 
+  Originality, and Delivery & Documentation) deterministically score submissions using 
+  temperature 0.0 to ensure objective, replicable evaluation.
+- Workload-Based Fees: AI judging agents are compensated with on-chain USDC micropayments 
+  directly to their EVM wallets on every evaluation based on the length of project details 
+  and their output reasoning.
+- On-Chain Escrow: Organizers launch and fund hackathons. The USDC is securely locked inside 
+  the JuriXEscrow smart contract on Arc Network.
+- Atomic Prize Payouts: Once judging completes, the smart contract atomically distributes 
+  locked rewards to winning teams in a single contract transaction.
+- Circle Smart Accounts (SCA): Organizers and developers sign in via email OTP and set up 
+  a secure PIN challenge. Developers can withdraw winnings directly to their external Web3 wallets.
+
+
+-----------------------------------------------------------------------------------------
+3. TRACK
+-----------------------------------------------------------------------------------------
+AI Agents & Developer Infrastructure (Alternative: DeFi & Payments)
+
+
+-----------------------------------------------------------------------------------------
+4. CIRCLE ACCOUNT EMAIL
+-----------------------------------------------------------------------------------------
+ezinneagwu21@gmail.com
+
+
+-----------------------------------------------------------------------------------------
+5. PRODUCTS USED
+-----------------------------------------------------------------------------------------
+- Circle Smart Accounts (SCA): Generates ERC-4337 smart-contract wallets for users.
+- Circle User-Controlled Wallets SDK & API: Facilitates email OTP verification, device 
+  registration, and secure PIN challenge validation.
+- Circle Programmable Wallets: Handles backend wallet checks, balance fetches, and transfer queries.
+- USDC Stablecoin: Native asset used for contract escrows, winning payouts, and agent fees.
+
+
+-----------------------------------------------------------------------------------------
+6. WORKING MVP
+-----------------------------------------------------------------------------------------
+- Vercel Live Deployment: https://jurixai.vercel.app
+- Localhost Dev Server: Runs on http://localhost:3000 (Vite + React framework)
+- Smart Contract Escrow Deployments:
+  * Arc Testnet Address: 0x89db74b925f694ebec1118cff9b08a1afe528785
+
+
+-----------------------------------------------------------------------------------------
+7. ARCHITECTURE DIAGRAM
+-----------------------------------------------------------------------------------------
+
+ [ USER / HOST / BUILDER ]
+      │
+      ├─► [ JuriXAI React Frontend ] ──► [ Circle Web SDK / Iframe ] (Auth / PASSKEY)
+      │
+      └─► [ TanStack Backend / API ]
+               │
+               ├─► [ Supabase DB ] (Persistence)
+               │
+               ├─► [ Vercel Crons ] (Deadline Worker) ──┐
+               │                                        ▼
+               │                          [ Autonomous AI Judging Engine ]
+               │                                        │
+               │         ┌──────────────────────────────┴───────────────┐
+               │         ▼ (Evaluate Code / Docs / Innovation)          ▼ (Compute Workload Fee)
+               │   [ 0G AI Router / GLM-5.1 ]                    [ Circle Wallets API ]
+               │         │                                              │
+               │         ├─► Vex (Code Agent)                           │
+               │         ├─► Kael (Product Agent)                       │
+               │         ├─► Oryn (Innovation Agent)                    │
+               │         └─► Zera (Delivery Agent)                      │
+               ▼                                                        ▼
+   [ Blockchain Network ] (Arc L1 Testnet)                              │
+         │                                                              │
+         ├─► [ JuriXEscrow Contract ] ◄─────────────────────────────────┘ (Escrow deposits / Payouts)
+         │        │
+         │        ├─► Atomically disburse prize pool to Winners
+         │        │
+         │        └─► Direct workload-based USDC fee transfers to Agent EVM Wallets
+         │
+         └─► Explorer verification links (Arcscan)
+
+
+-----------------------------------------------------------------------------------------
+8. DOCUMENTATION
+-----------------------------------------------------------------------------------------
+
+8.1 Setup and Installation
+To execute the application locally:
+  $ pnpm install
+  $ npm run dev
+  * Open http://localhost:3000 in your browser.
+
+8.2 API Endpoints
+- GET/POST `/api/judge-deadlines`: The main autonomous trigger endpoint. It fetches expired 
+  hackathons, invokes AI judges, computes and registers scores, executes workload fees on-chain, 
+  and locks standings for disbursement.
+
+8.3 Workload Fee Algorithm
+To compensate judging agents for API calls and gas, they receive a dynamic workload fee:
+  Fee (USDC) = 0.0002 + (Description Length + Rationale Length) * 0.000001
+- 0.0002 USDC: Covers base setup, DB calls, and gas.
+- 0.000001 USDC / char: Scales directly to input complexity and agent output rationale length.
+
+8.4 Flag Penalties
+Agents raise flags when submissions are incomplete, directly penalizing project scores:
+- `missing_repo` (Vex): Set to 1.00 score.
+- `weak_readme` (Zera): -3.0 points deduction.
+- `missing_demo` (Kael): -4.0 points deduction.
+
+
+-----------------------------------------------------------------------------------------
+9. PRODUCT FEEDBACK (CIRCLE SDK/APIS)
+-----------------------------------------------------------------------------------------
+1. Third-Party Cookie Dependency: The Circle SDK mounts cross-origin iframes (w3s.circle.com) 
+   to read/write credentials securely. Browsers that restrict third-party cookies (Brave, Safari, 
+   strict Chrome configs) experience silent wallet initialization failures. Returning developer-friendly 
+   error events or clear error flags would optimize user onboarding.
+2. Silent Hanging on Out-of-Order Flows: Invoking wallet actions before a user PIN challenge 
+   is completed leads to a silent hang in the SDK without throwing. Specific error catch parameters 
+   would prevent extensive debug loops.
+3. Paymaster Deployment Portal: Simplifying gas sponsorship settings for developer-controlled 
+   wallets on emerging L2/L1 chains (like Arc Testnet or customized EVM chains) via the developer console 
+   would increase developer agility.
+4. Local SDK Simulations: Developing offline mock models for Circle APIs would speed up offline 
+   testing and CI/CD pipelines without needing internet endpoints and active sandbox credentials.

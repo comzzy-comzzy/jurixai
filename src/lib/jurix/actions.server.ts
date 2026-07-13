@@ -15,7 +15,7 @@ import {
   listHackathons,
   fetchWeightedScores,
 } from "./data.server";
-import { runExpiredHackathons, runHackathonJudging } from "./judging.server";
+import { runExpiredHackathons, runHackathonJudging, disburseHackathonPrizesInternal } from "./judging.server";
 import { probeJudgeModel } from "./judge-model.server";
 import { requireAdmin } from "@/lib/admin/guard.server";
 import { readUsdcBalance, ESCROW_CONTRACT_ADDRESS } from "@/lib/chain";
@@ -472,147 +472,7 @@ export const disburseHackathonPrizes = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireAdmin();
     ensureConfigured();
-    const supabase = getSupabaseServerClient();
-
-    // 1. Fetch hackathon details
-    const hackathon = await getHackathonDetail(data.hackathon_id);
-    if (!hackathon) throw new Error("Hackathon not found.");
-    if (hackathon.status !== "closed") {
-      throw new Error("Hackathon must be closed/judged to disburse rewards.");
-    }
-
-    // 1.5. Verify the treasury has been funded by the hoster
-    if (!hackathon.treasury_address) {
-      throw new Error("Treasury wallet has not been configured for this hackathon.");
-    }
-
-    const durationDays =
-      hackathon.start_date && hackathon.deadline
-        ? Math.ceil(
-            (new Date(hackathon.deadline).getTime() - new Date(hackathon.start_date).getTime()) /
-              (1000 * 60 * 60 * 24),
-          )
-        : 0;
-    const extraMonths = durationDays > 0 ? Math.floor(durationDays / 30) : 0;
-    const adminFee = 10 + extraMonths;
-    const totalFunding = hackathon.prize_pool_usdc + adminFee;
-    const requiredEscrowBalance = hackathon.prize_pool_usdc;
-
-    const treasuryBalance = await readUsdcBalance(hackathon.treasury_address);
-    if (treasuryBalance < requiredEscrowBalance) {
-      throw new Error(
-        `Treasury underfunded. Live balance is ${treasuryBalance} USDC, but prize escrow requires ${requiredEscrowBalance} USDC after the ${adminFee} USDC platform fee is forwarded.`,
-      );
-    }
-
-    const submissions = hackathon.submissions ?? [];
-    if (submissions.length === 0) {
-      throw new Error("No submissions to pay out.");
-    }
-
-    const subIds = submissions.map((s) => s.id);
-
-    // Calculate ranked leaderboard using weighted scores
-    const scoreMap = await fetchWeightedScores(subIds);
-    const ranked = submissions
-      .map((sub) => ({
-        ...sub,
-        score: scoreMap.get(sub.id) ?? 0,
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    const winnerSplit = hackathon.winner_split || [50, 30, 20];
-    const payouts: { registrationId: string; address: string; amount: number; name: string }[] = [];
-
-    for (let i = 0; i < winnerSplit.length; i++) {
-      const percent = winnerSplit[i];
-      const project = ranked[i];
-      if (!project) break; // If there are fewer projects than split allocations
-
-      const payoutAddress = project.payout_address?.trim();
-      if (!payoutAddress || !/^0x[a-fA-F0-9]{40}$/.test(payoutAddress)) {
-        console.warn(
-          `[payout] Winner rank ${i + 1} (${project.project_name}) has no valid payout address.`,
-        );
-        continue;
-      }
-
-      const reward = Number(((hackathon.prize_pool_usdc * percent) / 100).toFixed(6));
-      if (reward <= 0) continue;
-
-      payouts.push({
-        registrationId: project.id,
-        address: payoutAddress,
-        amount: reward,
-        name: project.project_name,
-      });
-    }
-
-    if (payouts.length === 0) {
-      throw new Error("No winners with valid payout addresses found.");
-    }
-
-    // Verify if we already disbursed winner rewards
-    const recipientAddresses = payouts.map((p) => p.address.toLowerCase());
-    const { data: done } = await supabase
-      .from("payments")
-      .select("to_address")
-      .eq("hackathon_id", data.hackathon_id)
-      .eq("kind", "payout")
-      .in("registration_id", subIds);
-
-    const alreadyPaid = (done ?? []).some((p) =>
-      recipientAddresses.includes(String(p.to_address).toLowerCase()),
-    );
-
-    if (alreadyPaid) {
-      throw new Error("Prizes have already been disbursed for this hackathon.");
-    }
-
-    // Call the JuriXEscrow contract to disburse prizes atomically on-chain
-    let txHash = "";
-    try {
-      const winnerAddrs = payouts.map((p) => p.address);
-      const winnerAmounts = payouts.map((p) => p.amount);
-
-      console.log(
-        `[payout] Triggering escrow disbursement of prizes on-chain via JuriXEscrow for hackathon: ${data.hackathon_id}`,
-      );
-      txHash = await disbursePrizesOnChain(data.hackathon_id, winnerAddrs, winnerAmounts);
-      console.log(
-        `[payout] Smart contract escrow disbursement successful. Transaction hash: ${txHash}`,
-      );
-    } catch (contractErr) {
-      console.error("[payout] Failed on-chain smart contract disbursement:", contractErr);
-      throw new Error(
-        `Escrow disbursement failed: ${contractErr instanceof Error ? contractErr.message : String(contractErr)}`,
-      );
-    }
-
-    const results: { address: string; amount: number; txHash: string; name: string }[] = [];
-
-    // Log the payouts as confirmed under the single transaction hash
-    for (const p of payouts) {
-      const { data: record, error: insErr } = await supabase
-        .from("payments")
-        .insert({
-          kind: "payout",
-          hackathon_id: data.hackathon_id,
-          registration_id: p.registrationId,
-          to_address: p.address,
-          amount_usdc: p.amount,
-          status: "confirmed",
-          circle_tx_id: txHash,
-        })
-        .select("id")
-        .single();
-
-      if (!insErr && record) {
-        results.push({ address: p.address, amount: p.amount, txHash, name: p.name });
-      }
-    }
-
-    return { success: true, paidCount: results.length, payouts: results };
+    return disburseHackathonPrizesInternal(data.hackathon_id);
   });
 
 type UpdateHackathonInput = {

@@ -309,6 +309,7 @@ export async function getHomeData(): Promise<HomeData> {
       { data: hackathons, error: hackathonError },
       { data: agents, error: agentError },
       { data: scores, error: scoreError },
+      { data: payments, error: paymentsError },
     ] = await Promise.all([
       supabase.from("hackathons").select("*").order("created_at", { ascending: false }).limit(6),
       supabase.from("judge_agents").select("*").order("weight_percent", { ascending: false }),
@@ -317,11 +318,17 @@ export async function getHomeData(): Promise<HomeData> {
         .select("id, created_at")
         .order("created_at", { ascending: false })
         .limit(8),
+      supabase
+        .from("payments")
+        .select("amount_usdc, to_address")
+        .eq("kind", "payout")
+        .eq("status", "confirmed"),
     ]);
 
     if (hackathonError) throw new Error(hackathonError.message);
     if (agentError) throw new Error(agentError.message);
     if (scoreError) throw new Error(scoreError.message);
+    if (paymentsError) throw new Error(paymentsError.message);
 
     const hackathonIds = (hackathons ?? []).map((row) => String(row.id));
     const counts = await fetchSubmissionCounts(hackathonIds);
@@ -375,11 +382,24 @@ export async function getHomeData(): Promise<HomeData> {
         ? (agents ?? []).map((row) => normalizeAgent(row as Record<string, unknown>))
         : FALLBACK_AGENTS;
 
+    const agentWallets = new Set(
+      (agents ?? [])
+        .map((a) => String(a.wallet_address || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    const usdcDistributed = (payments ?? [])
+      .filter((p) => {
+        const toAddr = String(p.to_address || "").trim().toLowerCase();
+        return toAddr && !agentWallets.has(toAddr);
+      })
+      .reduce((sum, p) => sum + toNumber(p.amount_usdc), 0);
+
     return {
       stats: {
         active_hackathons: activeHackathons,
         total_submissions: totalSubmissions,
-        usdc_distributed: 0,
+        usdc_distributed: usdcDistributed,
         verdicts_rendered: verdictsRendered,
       },
       featured_hackathons: featured,

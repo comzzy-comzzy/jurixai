@@ -132,8 +132,8 @@ async function main() {
   const abi = contract.abi;
   const bytecode = contract.evm.bytecode.object;
 
-  console.log("Compilation complete. Deploying v2 contract to Arc Testnet...");
-  console.log(`USDC Token: ${USDC_ADDRESS}`);
+  console.log(`Compilation complete. Deploying v2 contract to ${activeChain.name}...`);
+  console.log(`USDC/USDT Token: ${USDC_ADDRESS}`);
   console.log(`Fee Collector: ${feeCollector}`);
 
   const walletClient = createWalletClient({

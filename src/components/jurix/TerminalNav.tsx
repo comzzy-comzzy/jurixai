@@ -9,6 +9,7 @@ const NAV = [
   { to: "/hackathons", label: "Browse" },
   { to: "/create", label: "Host" },
   { to: "/profile", label: "Dashboard" },
+  { to: "/playground", label: "ASP Playground" },
   { to: "/docs", label: "Docs" },
 ] as const;
 

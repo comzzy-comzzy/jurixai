@@ -1,0 +1,299 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { evaluateSubmissionWithModel } from "@/lib/jurix/judge-model.server";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createPublicClient, http, decodeFunctionData } from "viem";
+import { activeChain, ARC_RPC_URL, USDC_ADDRESS } from "@/lib/chain";
+import { getOperatorAddress } from "@/lib/chain.server";
+import type { JudgeAgent, JudgingCriterion, HackathonSummary, SubmissionSummary } from "@/lib/jurix/types";
+
+// Standard ERC20 transfer ABI for decoding
+const transferAbi = [
+  {
+    name: "transfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "amount", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "bool" }]
+  }
+] as const;
+
+// Define default criteria and details for the pay-per-call service
+const AGENT_CRITERIA_MAP = {
+  "vex-01": {
+    name: "Code Quality & Implementation",
+    description: "Does the code run correctly? Is it clean, well-structured, secure, and maintainable?"
+  },
+  "kael-02": {
+    name: "Product Design & UX",
+    description: "Is the design user-friendly? Does the product solve a real problem effectively?"
+  },
+  "oryn-03": {
+    name: "Innovation & Originality",
+    description: "How creative is the project? Is the solution new and ambitious?"
+  },
+  "zera-04": {
+    name: "Completeness & Execution",
+    description: "Is the codebase polished? Are there good instructions, docs, and clean deployment files?"
+  }
+};
+
+const handleJudge = async ({ request }: { request: Request }) => {
+  try {
+    const body = await request.json();
+    const { githubUrl, githubUrls, description, txHash, sandbox } = body;
+
+    if (!githubUrl && (!githubUrls || !Array.isArray(githubUrls) || githubUrls.length === 0)) {
+      return Response.json({ ok: false, error: "Missing githubUrl or githubUrls parameter." }, { status: 400 });
+    }
+
+    const urlsToAudit = githubUrl ? [githubUrl] : (githubUrls as string[]);
+    const repoCount = urlsToAudit.length;
+    const supabase = getSupabaseServerClient();
+
+    // 1. Verify payment on X Layer Mainnet if sandbox is false and txHash is provided
+    if (!sandbox) {
+      if (!txHash) {
+        return Response.json({ ok: false, error: "Payment transaction hash is required for mainnet mode." }, { status: 402 });
+      }
+
+      // Prevent replay attack by checking if txHash has already been registered
+      const { data: existingPayment } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("circle_tx_id", txHash)
+        .maybeSingle();
+
+      if (existingPayment) {
+        return Response.json({ ok: false, error: "This transaction hash has already been used to fund an evaluation." }, { status: 400 });
+      }
+
+      // Check transaction on chain
+      const client = createPublicClient({ chain: activeChain, transport: http(ARC_RPC_URL) });
+      let tx;
+      let receipt;
+      try {
+        tx = await client.getTransaction({ hash: txHash as `0x${string}` });
+        receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
+      } catch (err) {
+        return Response.json({ ok: false, error: "Failed to fetch transaction details on X Layer. Verify the hash is correct and confirmed." }, { status: 400 });
+      }
+
+      if (receipt.status !== "success") {
+        return Response.json({ ok: false, error: "Payment transaction has reverted or failed on-chain." }, { status: 400 });
+      }
+
+      // Verify transaction is sending USDT to operator
+      if (tx.to?.toLowerCase() !== USDC_ADDRESS.toLowerCase()) {
+        return Response.json({ ok: false, error: "Transaction was not directed to the X Layer USDT contract." }, { status: 400 });
+      }
+
+      try {
+        const decoded = decodeFunctionData({
+          abi: transferAbi,
+          data: tx.input
+        });
+        const recipient = decoded.args[0];
+        const amount = decoded.args[1];
+
+        const operatorAddress = getOperatorAddress();
+        if (recipient.toLowerCase() !== operatorAddress.toLowerCase()) {
+          return Response.json({ ok: false, error: "Recipient is not the JuriXAI operator address." }, { status: 400 });
+        }
+
+        // Must be at least 0.50 USDT per repository (500000 base units per repo)
+        const expectedMin = 500000n * BigInt(repoCount);
+        if (amount < expectedMin) {
+          return Response.json({ ok: false, error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} USDT for ${repoCount} repositories.` }, { status: 400 });
+        }
+
+        // Log payment in DB
+        await supabase.from("payments").insert({
+          kind: "entry",
+          from_address: tx.from,
+          to_address: recipient,
+          amount_usdc: Number(amount) / 1000000,
+          circle_tx_id: txHash,
+          status: "confirmed"
+        });
+      } catch (err) {
+        return Response.json({ ok: false, error: "Invalid transaction structure or decoding failed. Make sure it is a standard USDT transfer." }, { status: 400 });
+      }
+    }
+
+    // 2. Fetch active judge agents from database
+    const { data: dbAgents, error: agentsError } = await supabase
+      .from("judge_agents")
+      .select("*")
+      .order("weight_percent", { ascending: false });
+
+    if (agentsError) {
+      throw new Error(agentsError.message);
+    }
+
+    const agents = (dbAgents ?? []).map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      short_code: row.short_code,
+      role: row.role,
+      focus_area: row.focus_area,
+      status: row.status,
+      color_hex: row.color_hex,
+      weight_percent: row.weight_percent,
+      system_prompt: row.system_prompt,
+      scoring_notes: row.scoring_notes,
+      wallet_address: row.wallet_address,
+      created_at: row.created_at
+    })) as JudgeAgent[];
+
+    // 3. Prepare mock summaries for evaluation
+    const hackathon: HackathonSummary = {
+      id: "api-judging",
+      name: "API Judging Service",
+      description: "AI Judge-as-a-Service pay-per-call API invocation",
+      submission_instructions: null,
+      required_deliverables: ["github"],
+      organizer_name: "JurixAI ASP",
+      organizer_email: "support@jurix.ai",
+      prize_pool_usdc: 0,
+      entry_fee_usdc: 0,
+      start_date: new Date().toISOString(),
+      deadline: new Date().toISOString(),
+      status: "closed",
+      treasury_wallet_id: null,
+      treasury_address: null,
+      winner_split: [100],
+      created_at: new Date().toISOString(),
+      submission_count: 1
+    };
+
+    const batchResults = [];
+
+    // Evaluate repositories sequentially to manage LLM rate limits cleanly
+    for (let i = 0; i < urlsToAudit.length; i++) {
+      const currentUrl = urlsToAudit[i];
+
+      const submission: SubmissionSummary = {
+        id: `api-submission-${i}`,
+        hackathon_id: "api-judging",
+        user_id: null,
+        project_name: `API Project Evaluation #${i + 1}`,
+        team_name: "External Caller",
+        description: description || "No description provided.",
+        github_url: currentUrl,
+        demo_url: null,
+        video_url: null,
+        payout_address: "0x0000000000000000000000000000000000000000",
+        entry_paid: true,
+        status: "complete",
+        community_votes: 0,
+        created_at: new Date().toISOString(),
+        weighted_score: 0
+      };
+
+      // Run evaluations for all active agents in parallel for the current repository
+      const evalPromises = agents.map(async (agent) => {
+        const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
+          name: `${agent.name} Evaluation`,
+          description: agent.focus_area
+        };
+
+        const criterion: JudgingCriterion = {
+          id: agent.id,
+          hackathon_id: "api-judging",
+          agent_id: agent.id,
+          name: criteriaData.name,
+          description: criteriaData.description,
+          weight_percent: agent.weight_percent,
+          sort_order: 0,
+          created_at: new Date().toISOString()
+        };
+
+        // In sandbox mode, lock non-Vex agents to enforce payment upgrade
+        if (sandbox && agent.slug !== "vex-01") {
+          return {
+            agent: agent.name,
+            role: agent.role,
+            score: 0,
+            confidence: 0,
+            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send 0.50 USDT per repository to unlock the full 4-agent evaluation.`,
+            evidence: [],
+            flags: ["LOCKED_SANDBOX"]
+          };
+        }
+
+        try {
+          const evaluation = await evaluateSubmissionWithModel(agent, criterion, hackathon, submission);
+          return {
+            agent: agent.name,
+            role: agent.role,
+            score: evaluation.score,
+            confidence: evaluation.confidence,
+            rationale: evaluation.rationale,
+            evidence: evaluation.evidence,
+            flags: evaluation.flags
+          };
+        } catch (err) {
+          return {
+            agent: agent.name,
+            role: agent.role,
+            score: 1,
+            confidence: 0,
+            rationale: `Error running evaluation: ${err instanceof Error ? err.message : "Inference failed."}`,
+            evidence: [],
+            flags: ["ERROR"]
+          };
+        }
+      });
+
+      const evaluations = await Promise.all(evalPromises);
+
+      // Calculate average score
+      let totalWeight = 0;
+      let weightedSum = 0;
+      evaluations.forEach((ev) => {
+        if (sandbox && ev.score === 0) return; // Ignore locked agents in average score
+        const agent = agents.find((a) => a.name === ev.agent);
+        const weight = agent ? agent.weight_percent : 25;
+        weightedSum += ev.score * weight;
+        totalWeight += weight;
+      });
+
+      const averageScore = Number((weightedSum / (totalWeight || 1)).toFixed(2));
+
+      batchResults.push({
+        githubUrl: currentUrl,
+        evaluations,
+        averageScore
+      });
+    }
+
+    const isSingle = Boolean(githubUrl);
+
+    return Response.json({
+      ok: true,
+      githubUrl: isSingle ? githubUrl : undefined,
+      txHash: txHash || "sandbox_mode",
+      evaluations: isSingle ? batchResults[0].evaluations : undefined,
+      averageScore: isSingle ? batchResults[0].averageScore : undefined,
+      results: !isSingle ? batchResults : undefined,
+      repoCount
+    });
+  } catch (error) {
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "Judging evaluation failed." },
+      { status: 500 }
+    );
+  }
+};
+
+export const Route = createFileRoute("/api/judge")({
+  server: {
+    handlers: {
+      POST: handleJudge
+    }
+  }
+});
