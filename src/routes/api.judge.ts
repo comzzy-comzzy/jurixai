@@ -71,23 +71,36 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
 
       // Check transaction on chain
-      const client = createPublicClient({ chain: activeChain, transport: http(ARC_RPC_URL) });
+      let verifyRpc = ARC_RPC_URL;
+      let verifyUsdc = USDC_ADDRESS;
+      let verifyChainName = "X Layer";
+      let verifyTokenSymbol = "USDT";
+
+      const reqChain = body.chain;
+      if (reqChain === "MONAD-MAINNET" || reqChain === "monadMainnet") {
+        verifyRpc = "https://rpc.monad.xyz";
+        verifyUsdc = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
+        verifyChainName = "Monad";
+        verifyTokenSymbol = "USDC";
+      }
+
+      const client = createPublicClient({ transport: http(verifyRpc) });
       let tx;
       let receipt;
       try {
         tx = await client.getTransaction({ hash: txHash as `0x${string}` });
         receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
       } catch (err) {
-        return Response.json({ ok: false, error: "Failed to fetch transaction details on X Layer. Verify the hash is correct and confirmed." }, { status: 400 });
+        return Response.json({ ok: false, error: `Failed to fetch transaction details on ${verifyChainName}. Verify the hash is correct and confirmed.` }, { status: 400 });
       }
 
       if (receipt.status !== "success") {
         return Response.json({ ok: false, error: "Payment transaction has reverted or failed on-chain." }, { status: 400 });
       }
 
-      // Verify transaction is sending USDT to operator
-      if (tx.to?.toLowerCase() !== USDC_ADDRESS.toLowerCase()) {
-        return Response.json({ ok: false, error: "Transaction was not directed to the X Layer USDT contract." }, { status: 400 });
+      // Verify transaction is sending tokens to operator
+      if (tx.to?.toLowerCase() !== verifyUsdc.toLowerCase()) {
+        return Response.json({ ok: false, error: `Transaction was not directed to the ${verifyChainName} ${verifyTokenSymbol} contract.` }, { status: 400 });
       }
 
       try {
@@ -103,10 +116,10 @@ const handleJudge = async ({ request }: { request: Request }) => {
           return Response.json({ ok: false, error: "Recipient is not the JuriXAI operator address." }, { status: 400 });
         }
 
-        // Must be at least 0.50 USDT per repository (500000 base units per repo)
+        // Must be at least 0.50 tokens per repository (500000 base units per repo)
         const expectedMin = 500000n * BigInt(repoCount);
         if (amount < expectedMin) {
-          return Response.json({ ok: false, error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} USDT for ${repoCount} repositories.` }, { status: 400 });
+          return Response.json({ ok: false, error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} ${verifyTokenSymbol} for ${repoCount} repositories.` }, { status: 400 });
         }
 
         // Log payment in DB

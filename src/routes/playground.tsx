@@ -225,12 +225,14 @@ function Playground() {
             description: description.trim(),
             txHash: mode === "live" ? txHash.trim() : undefined,
             sandbox: mode === "sandbox",
+            chain: CHAIN_NAME,
           }
         : {
             githubUrls: parsedUrls,
             description: description.trim(),
             txHash: mode === "live" ? txHash.trim() : undefined,
             sandbox: mode === "sandbox",
+            chain: CHAIN_NAME,
           };
 
       const res = await fetch("/api/judge", {
@@ -263,7 +265,7 @@ function Playground() {
       <header className="mb-12 max-w-3xl animate-slide-in">
         <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 mb-4 text-xs font-semibold text-accent">
           <Cpu className="size-3.5 animate-pulse" />
-          X Layer Mainnet Powered ASP
+          {networkName} Powered ASP
         </div>
         <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 italic">
           AI Judge-as-a-Service <span className="text-muted-foreground">Playground</span>
