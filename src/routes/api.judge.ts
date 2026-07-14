@@ -4,7 +4,12 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createPublicClient, http, decodeFunctionData } from "viem";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
 import { getOperatorAddress } from "@/lib/chain.server";
-import type { JudgeAgent, JudgingCriterion, HackathonSummary, SubmissionSummary } from "@/lib/jurix/types";
+import type {
+  JudgeAgent,
+  JudgingCriterion,
+  HackathonSummary,
+  SubmissionSummary,
+} from "@/lib/jurix/types";
 
 // Standard ERC20 transfer ABI for decoding
 const transferAbi = [
@@ -14,30 +19,32 @@ const transferAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "recipient", type: "address" },
-      { name: "amount", type: "uint256" }
+      { name: "amount", type: "uint256" },
     ],
-    outputs: [{ name: "", type: "bool" }]
-  }
+    outputs: [{ name: "", type: "bool" }],
+  },
 ] as const;
 
 // Define default criteria and details for the pay-per-call service
 const AGENT_CRITERIA_MAP = {
   "vex-01": {
     name: "Code Quality & Implementation",
-    description: "Does the code run correctly? Is it clean, well-structured, secure, and maintainable?"
+    description:
+      "Does the code run correctly? Is it clean, well-structured, secure, and maintainable?",
   },
   "kael-02": {
     name: "Product Design & UX",
-    description: "Is the design user-friendly? Does the product solve a real problem effectively?"
+    description: "Is the design user-friendly? Does the product solve a real problem effectively?",
   },
   "oryn-03": {
     name: "Innovation & Originality",
-    description: "How creative is the project? Is the solution new and ambitious?"
+    description: "How creative is the project? Is the solution new and ambitious?",
   },
   "zera-04": {
     name: "Completeness & Execution",
-    description: "Is the codebase polished? Are there good instructions, docs, and clean deployment files?"
-  }
+    description:
+      "Is the codebase polished? Are there good instructions, docs, and clean deployment files?",
+  },
 };
 
 const handleJudge = async ({ request }: { request: Request }) => {
@@ -46,7 +53,10 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const { githubUrl, githubUrls, description, txHash, sandbox } = body;
 
     if (!githubUrl && (!githubUrls || !Array.isArray(githubUrls) || githubUrls.length === 0)) {
-      return Response.json({ ok: false, error: "Missing githubUrl or githubUrls parameter." }, { status: 400 });
+      return Response.json(
+        { ok: false, error: "Missing githubUrl or githubUrls parameter." },
+        { status: 400 },
+      );
     }
 
     const urlsToAudit = githubUrl ? [githubUrl] : (githubUrls as string[]);
@@ -56,7 +66,10 @@ const handleJudge = async ({ request }: { request: Request }) => {
     // 1. Verify payment on X Layer Mainnet if sandbox is false and txHash is provided
     if (!sandbox) {
       if (!txHash) {
-        return Response.json({ ok: false, error: "Payment transaction hash is required for mainnet mode." }, { status: 402 });
+        return Response.json(
+          { ok: false, error: "Payment transaction hash is required for mainnet mode." },
+          { status: 402 },
+        );
       }
 
       // Prevent replay attack by checking if txHash has already been registered
@@ -67,7 +80,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
         .maybeSingle();
 
       if (existingPayment) {
-        return Response.json({ ok: false, error: "This transaction hash has already been used to fund an evaluation." }, { status: 400 });
+        return Response.json(
+          {
+            ok: false,
+            error: "This transaction hash has already been used to fund an evaluation.",
+          },
+          { status: 400 },
+        );
       }
 
       // Check transaction on chain
@@ -77,8 +96,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
       let verifyChainName = isXLayer
         ? "X Layer"
         : CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
-        ? "Polygon"
-        : "Arc";
+          ? "Polygon"
+          : "Arc";
       let verifyTokenSymbol = isXLayer ? "USDT" : "USDC";
 
       const client = createPublicClient({ transport: http(verifyRpc) });
@@ -88,35 +107,68 @@ const handleJudge = async ({ request }: { request: Request }) => {
         tx = await client.getTransaction({ hash: txHash as `0x${string}` });
         receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
       } catch (err) {
-        return Response.json({ ok: false, error: `Failed to fetch transaction details on ${verifyChainName}. Verify the hash is correct and confirmed.` }, { status: 400 });
+        return Response.json(
+          {
+            ok: false,
+            error: `Failed to fetch transaction details on ${verifyChainName}. Verify the hash is correct and confirmed.`,
+          },
+          { status: 400 },
+        );
       }
 
       if (receipt.status !== "success") {
-        return Response.json({ ok: false, error: "Payment transaction has reverted or failed on-chain." }, { status: 400 });
+        return Response.json(
+          { ok: false, error: "Payment transaction has reverted or failed on-chain." },
+          { status: 400 },
+        );
       }
 
       // Verify transaction is sending tokens to operator
-      if (tx.to?.toLowerCase() !== verifyUsdc.toLowerCase()) {
-        return Response.json({ ok: false, error: `Transaction was not directed to the ${verifyChainName} ${verifyTokenSymbol} contract.` }, { status: 400 });
+      const allowedContracts = [verifyUsdc.toLowerCase()];
+      if (isXLayer) {
+        // Also support standard/previous USDT contract address on X Layer
+        const prevXLayerUsdt = "0x1e4a5963ab75d8c9021ce480b42188849d41d7d9";
+        if (!allowedContracts.includes(prevXLayerUsdt)) {
+          allowedContracts.push(prevXLayerUsdt);
+        }
+      }
+
+      if (!tx.to || !allowedContracts.includes(tx.to.toLowerCase())) {
+        return Response.json(
+          {
+            ok: false,
+            error: `Transaction was not directed to the ${verifyChainName} ${verifyTokenSymbol} contract.`,
+          },
+          { status: 400 },
+        );
       }
 
       try {
         const decoded = decodeFunctionData({
           abi: transferAbi,
-          data: tx.input
+          data: tx.input,
         });
         const recipient = decoded.args[0];
         const amount = decoded.args[1];
 
         const operatorAddress = getOperatorAddress();
         if (recipient.toLowerCase() !== operatorAddress.toLowerCase()) {
-          return Response.json({ ok: false, error: "Recipient is not the JuriXAI operator address." }, { status: 400 });
+          return Response.json(
+            { ok: false, error: "Recipient is not the JuriXAI operator address." },
+            { status: 400 },
+          );
         }
 
         // Must be at least 0.50 tokens per repository (500000 base units per repo)
         const expectedMin = 500000n * BigInt(repoCount);
         if (amount < expectedMin) {
-          return Response.json({ ok: false, error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} ${verifyTokenSymbol} for ${repoCount} repositories.` }, { status: 400 });
+          return Response.json(
+            {
+              ok: false,
+              error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} ${verifyTokenSymbol} for ${repoCount} repositories.`,
+            },
+            { status: 400 },
+          );
         }
 
         // Log payment in DB
@@ -126,10 +178,17 @@ const handleJudge = async ({ request }: { request: Request }) => {
           to_address: recipient,
           amount_usdc: Number(amount) / 1000000,
           circle_tx_id: txHash,
-          status: "confirmed"
+          status: "confirmed",
         });
       } catch (err) {
-        return Response.json({ ok: false, error: "Invalid transaction structure or decoding failed. Make sure it is a standard USDT transfer." }, { status: 400 });
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "Invalid transaction structure or decoding failed. Make sure it is a standard USDT transfer.",
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -156,7 +215,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       system_prompt: row.system_prompt,
       scoring_notes: row.scoring_notes,
       wallet_address: row.wallet_address,
-      created_at: row.created_at
+      created_at: row.created_at,
     })) as JudgeAgent[];
 
     // 3. Prepare mock summaries for evaluation
@@ -177,7 +236,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       treasury_address: null,
       winner_split: [100],
       created_at: new Date().toISOString(),
-      submission_count: 1
+      submission_count: 1,
     };
 
     const batchResults = [];
@@ -201,14 +260,14 @@ const handleJudge = async ({ request }: { request: Request }) => {
         status: "complete",
         community_votes: 0,
         created_at: new Date().toISOString(),
-        weighted_score: 0
+        weighted_score: 0,
       };
 
       // Run evaluations for all active agents in parallel for the current repository
       const evalPromises = agents.map(async (agent) => {
         const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
           name: `${agent.name} Evaluation`,
-          description: agent.focus_area
+          description: agent.focus_area,
         };
 
         const criterion: JudgingCriterion = {
@@ -219,7 +278,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
           description: criteriaData.description,
           weight_percent: agent.weight_percent,
           sort_order: 0,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         };
 
         // In sandbox mode, lock non-Vex agents to enforce payment upgrade
@@ -231,12 +290,17 @@ const handleJudge = async ({ request }: { request: Request }) => {
             confidence: 0,
             rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send 0.50 USDT per repository to unlock the full 4-agent evaluation.`,
             evidence: [],
-            flags: ["LOCKED_SANDBOX"]
+            flags: ["LOCKED_SANDBOX"],
           };
         }
 
         try {
-          const evaluation = await evaluateSubmissionWithModel(agent, criterion, hackathon, submission);
+          const evaluation = await evaluateSubmissionWithModel(
+            agent,
+            criterion,
+            hackathon,
+            submission,
+          );
           return {
             agent: agent.name,
             role: agent.role,
@@ -244,7 +308,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             confidence: evaluation.confidence,
             rationale: evaluation.rationale,
             evidence: evaluation.evidence,
-            flags: evaluation.flags
+            flags: evaluation.flags,
           };
         } catch (err) {
           return {
@@ -254,7 +318,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             confidence: 0,
             rationale: `Error running evaluation: ${err instanceof Error ? err.message : "Inference failed."}`,
             evidence: [],
-            flags: ["ERROR"]
+            flags: ["ERROR"],
           };
         }
       });
@@ -277,7 +341,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       batchResults.push({
         githubUrl: currentUrl,
         evaluations,
-        averageScore
+        averageScore,
       });
     }
 
@@ -290,12 +354,12 @@ const handleJudge = async ({ request }: { request: Request }) => {
       evaluations: isSingle ? batchResults[0].evaluations : undefined,
       averageScore: isSingle ? batchResults[0].averageScore : undefined,
       results: !isSingle ? batchResults : undefined,
-      repoCount
+      repoCount,
     });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "Judging evaluation failed." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 };
@@ -303,7 +367,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
 export const Route = createFileRoute("/api/judge")({
   server: {
     handlers: {
-      POST: handleJudge
-    }
-  }
+      POST: handleJudge,
+    },
+  },
 });

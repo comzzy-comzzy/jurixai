@@ -4,7 +4,10 @@
  */
 import { createPublicClient, http, erc20Abi, formatUnits, defineChain } from "viem";
 
-const ENV = (typeof process !== "undefined" ? process.env : null) ?? (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+const ENV =
+  (typeof process !== "undefined" ? process.env : null) ??
+  (import.meta as { env?: Record<string, string | undefined> }).env ??
+  {};
 
 export let CHAIN_NAME = ENV.VITE_CIRCLE_CHAIN || "ARC-TESTNET";
 
@@ -25,7 +28,8 @@ if (typeof window !== "undefined") {
 let rpcUrl = ENV.VITE_ARC_RPC_URL || "https://rpc.testnet.arc.network";
 let explorerUrl = ENV.VITE_ARC_EXPLORER || "https://testnet.arcscan.app";
 let chainId = Number(ENV.VITE_ARC_CHAIN_ID || "5042002");
-let usdcAddress = (ENV.VITE_USDC_ADDRESS || "0x3600000000000000000000000000000000000000") as `0x${string}`;
+let usdcAddress = (ENV.VITE_USDC_ADDRESS ||
+  "0x3600000000000000000000000000000000000000") as `0x${string}`;
 let nativeName = "USDC";
 let nativeSymbol = "USDC";
 let isTestnet = true;
@@ -42,7 +46,8 @@ if (CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy") {
   rpcUrl = ENV.VITE_XLAYER_RPC_URL || "https://rpc.xlayer.tech";
   explorerUrl = ENV.VITE_XLAYER_EXPLORER || "https://www.okx.com/web3/explorer/xlayer";
   chainId = 196;
-  usdcAddress = (ENV.VITE_XLAYER_USDT_ADDRESS || "0x1e4a5963ab45c92842273a04572e87e1a9bfd975") as `0x${string}`; // USDT on X Layer Mainnet
+  usdcAddress = (ENV.VITE_XLAYER_USDT_ADDRESS ||
+    "0x779ded0c9e1022225f8e0630b35a9b54be713736") as `0x${string}`; // USDT0 on X Layer Mainnet
   nativeName = "OKB";
   nativeSymbol = "OKB";
   isTestnet = false;
@@ -60,8 +65,8 @@ export const activeChain = defineChain({
     CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
       ? "Polygon Amoy"
       : CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
-      ? "X Layer Mainnet"
-      : "Arc Testnet",
+        ? "X Layer Mainnet"
+        : "Arc Testnet",
   nativeCurrency: { name: nativeName, symbol: nativeSymbol, decimals: 18 },
   rpcUrls: {
     default: { http: [ARC_RPC_URL] },
@@ -73,8 +78,8 @@ export const activeChain = defineChain({
         CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
           ? "Polygonscan"
           : CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
-          ? "OKX Explorer"
-          : "Arcscan",
+            ? "OKX Explorer"
+            : "Arcscan",
       url: ARC_EXPLORER,
     },
   },
@@ -101,32 +106,30 @@ export async function readUsdcBalance(address: string): Promise<number> {
   return Number(formatUnits(raw, USDC_DECIMALS));
 }
 
-export const ESCROW_CONTRACT_ADDRESS = ENV.VITE_ESCROW_CONTRACT_ADDRESS || (
-  CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
+export const ESCROW_CONTRACT_ADDRESS =
+  ENV.VITE_ESCROW_CONTRACT_ADDRESS ||
+  (CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
     ? "0xd5294c32b2d4b29f141afd97346820af0235191f"
-  : "0x89db74b925f694ebec1118cff9b08a1afe528785"
-);
+    : "0x89db74b925f694ebec1118cff9b08a1afe528785");
 
 export const escrowAbi = [
   {
-    inputs: [
-      { internalType: "string", name: "hackathonId", type: "string" }
-    ],
+    inputs: [{ internalType: "string", name: "hackathonId", type: "string" }],
     name: "cancelAndRefund",
     outputs: [],
     stateMutability: "nonpayable",
-    type: "function"
+    type: "function",
   },
   {
     inputs: [
       { internalType: "string", name: "hackathonId", type: "string" },
       { internalType: "address[]", name: "winners", type: "address[]" },
-      { internalType: "uint256[]", name: "amounts", type: "uint256[]" }
+      { internalType: "uint256[]", name: "amounts", type: "uint256[]" },
     ],
     name: "disbursePrizes",
     outputs: [],
     stateMutability: "nonpayable",
-    type: "function"
+    type: "function",
   },
   {
     inputs: [{ internalType: "string", name: "", type: "string" }],
@@ -136,23 +139,21 @@ export const escrowAbi = [
       { internalType: "uint256", name: "prizePool", type: "uint256" },
       { internalType: "uint256", name: "platformFee", type: "uint256" },
       { internalType: "bool", name: "disbursed", type: "bool" },
-      { internalType: "bool", name: "exists", type: "bool" }
+      { internalType: "bool", name: "exists", type: "bool" },
     ],
     stateMutability: "view",
-    type: "function"
+    type: "function",
   },
   {
     inputs: [
       { internalType: "string", name: "hackathonId", type: "string" },
       { internalType: "address", name: "hoster", type: "address" },
       { internalType: "uint256", name: "prizePool", type: "uint256" },
-      { internalType: "uint256", name: "platformFee", type: "uint256" }
+      { internalType: "uint256", name: "platformFee", type: "uint256" },
     ],
     name: "registerHackathon",
     outputs: [],
     stateMutability: "nonpayable",
-    type: "function"
-  }
+    type: "function",
+  },
 ] as const;
-
-
