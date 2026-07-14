@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { evaluateSubmissionWithModel } from "@/lib/jurix/judge-model.server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createPublicClient, http, decodeFunctionData } from "viem";
-import { activeChain, ARC_RPC_URL, USDC_ADDRESS } from "@/lib/chain";
+import { activeChain, ARC_RPC_URL, USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
 import { getOperatorAddress } from "@/lib/chain.server";
 import type { JudgeAgent, JudgingCriterion, HackathonSummary, SubmissionSummary } from "@/lib/jurix/types";
 
@@ -71,18 +71,15 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
 
       // Check transaction on chain
+      const isXLayer = CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet";
       let verifyRpc = ARC_RPC_URL;
       let verifyUsdc = USDC_ADDRESS;
-      let verifyChainName = "X Layer";
-      let verifyTokenSymbol = "USDT";
-
-      const reqChain = body.chain;
-      if (reqChain === "MONAD-MAINNET" || reqChain === "monadMainnet") {
-        verifyRpc = "https://rpc.monad.xyz";
-        verifyUsdc = "0x754704Bc059F8C67012fEd69BC8A327a5aafb603";
-        verifyChainName = "Monad";
-        verifyTokenSymbol = "USDC";
-      }
+      let verifyChainName = isXLayer
+        ? "X Layer"
+        : CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
+        ? "Polygon"
+        : "Arc";
+      let verifyTokenSymbol = isXLayer ? "USDT" : "USDC";
 
       const client = createPublicClient({ transport: http(verifyRpc) });
       let tx;

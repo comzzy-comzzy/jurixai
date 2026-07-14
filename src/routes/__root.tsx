@@ -138,9 +138,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
-  const isMonad = CHAIN_NAME.includes("MONAD") || CHAIN_NAME.includes("monad");
   return (
-    <html lang="en" className={isMonad ? "dark monad-theme" : ""}>
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
@@ -154,12 +153,11 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const isMonad = CHAIN_NAME.includes("MONAD") || CHAIN_NAME.includes("monad");
 
   return (
     <QueryClientProvider client={queryClient}>
       <WalletProvider>
-        <div className={`min-h-screen flex flex-col bg-background text-foreground ${isMonad ? "dark monad-theme" : ""}`}>
+        <div className="min-h-screen flex flex-col bg-background text-foreground">
           <TerminalNav />
           <main className="flex-1">
             <Outlet />

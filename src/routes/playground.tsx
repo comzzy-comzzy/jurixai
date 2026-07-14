@@ -37,9 +37,13 @@ type AnalysisResult = {
 };
 
 function Playground() {
-  const isMonad = CHAIN_NAME.includes("MONAD") || CHAIN_NAME.includes("monad");
-  const tokenSymbol = isMonad ? "USDC" : "USDT";
-  const networkName = isMonad ? "Monad Mainnet" : "X Layer Mainnet";
+  const isXLayer = CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet";
+  const tokenSymbol = isXLayer ? "USDT" : "USDC";
+  const networkName = isXLayer
+    ? "X Layer Mainnet"
+    : CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
+    ? "Polygon Amoy"
+    : "Arc Testnet";
 
   const [tab, setTab] = useState<"single" | "batch">("single");
   const [githubUrl, setGithubUrl] = useState("");

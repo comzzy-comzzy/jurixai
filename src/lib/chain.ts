@@ -46,22 +46,6 @@ if (CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy") {
   nativeName = "OKB";
   nativeSymbol = "OKB";
   isTestnet = false;
-} else if (CHAIN_NAME === "MONAD-MAINNET" || CHAIN_NAME === "monadMainnet") {
-  rpcUrl = ENV.VITE_MONAD_RPC_URL || "https://rpc.monad.xyz";
-  explorerUrl = ENV.VITE_MONAD_EXPLORER || "https://monadscan.com";
-  chainId = 143;
-  usdcAddress = (ENV.VITE_MONAD_USDC_ADDRESS || "0x754704Bc059F8C67012fEd69BC8A327a5aafb603") as `0x${string}`; // Canonical USDC on Monad Mainnet
-  nativeName = "MON";
-  nativeSymbol = "MON";
-  isTestnet = false;
-} else if (CHAIN_NAME === "MONAD-TESTNET" || CHAIN_NAME === "monadTestnet") {
-  rpcUrl = ENV.VITE_MONAD_RPC_URL || "https://testnet-rpc.monad.xyz";
-  explorerUrl = ENV.VITE_MONAD_EXPLORER || "https://testnet.monadscan.com";
-  chainId = 10143;
-  usdcAddress = (ENV.VITE_MONAD_USDC_ADDRESS || "0x534b2f3A21130d7a60830c2Df862319e593943A3") as `0x${string}`; // Testnet USDC
-  nativeName = "MON";
-  nativeSymbol = "MON";
-  isTestnet = true;
 }
 
 export const ARC_RPC_URL = rpcUrl;
@@ -77,10 +61,6 @@ export const activeChain = defineChain({
       ? "Polygon Amoy"
       : CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
       ? "X Layer Mainnet"
-      : CHAIN_NAME === "MONAD-MAINNET" || CHAIN_NAME === "monadMainnet"
-      ? "Monad Mainnet"
-      : CHAIN_NAME === "MONAD-TESTNET" || CHAIN_NAME === "monadTestnet"
-      ? "Monad Testnet"
       : "Arc Testnet",
   nativeCurrency: { name: nativeName, symbol: nativeSymbol, decimals: 18 },
   rpcUrls: {
@@ -94,10 +74,6 @@ export const activeChain = defineChain({
           ? "Polygonscan"
           : CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
           ? "OKX Explorer"
-          : CHAIN_NAME === "MONAD-MAINNET" || CHAIN_NAME === "monadMainnet"
-          ? "Monadscan"
-          : CHAIN_NAME === "MONAD-TESTNET" || CHAIN_NAME === "monadTestnet"
-          ? "Monadscan (Testnet)"
           : "Arcscan",
       url: ARC_EXPLORER,
     },
@@ -128,10 +104,6 @@ export async function readUsdcBalance(address: string): Promise<number> {
 export const ESCROW_CONTRACT_ADDRESS = ENV.VITE_ESCROW_CONTRACT_ADDRESS || (
   CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
     ? "0xd5294c32b2d4b29f141afd97346820af0235191f"
-  : CHAIN_NAME === "MONAD-MAINNET" || CHAIN_NAME === "monadMainnet"
-    ? "0xd5294c32b2d4b29f141afd97346820af0235191f"
-  : CHAIN_NAME === "MONAD-TESTNET" || CHAIN_NAME === "monadTestnet"
-    ? "0x0000000000000000000000000000000000000000" // To be updated upon deployment
   : "0x89db74b925f694ebec1118cff9b08a1afe528785"
 );
 
