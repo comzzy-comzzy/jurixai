@@ -51,6 +51,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
   try {
     const body = await request.json();
     const { githubUrl, githubUrls, description, txHash, sandbox } = body;
+    let paymentData: any = null;
 
     if (!githubUrl && (!githubUrls || !Array.isArray(githubUrls) || githubUrls.length === 0)) {
       return Response.json(
@@ -171,15 +172,15 @@ const handleJudge = async ({ request }: { request: Request }) => {
           );
         }
 
-        // Log payment in DB
-        await supabase.from("payments").insert({
+        // Save payment details to insert later after evaluations succeed
+        paymentData = {
           kind: "entry",
           from_address: tx.from,
           to_address: recipient,
           amount_usdc: Number(amount) / 1000000,
           circle_tx_id: txHash,
           status: "confirmed",
-        });
+        };
       } catch (err) {
         return Response.json(
           {
@@ -343,6 +344,11 @@ const handleJudge = async ({ request }: { request: Request }) => {
         evaluations,
         averageScore,
       });
+    }
+
+    // Log payment in DB now that the evaluations succeeded
+    if (!sandbox && paymentData) {
+      await supabase.from("payments").insert(paymentData);
     }
 
     const isSingle = Boolean(githubUrl);

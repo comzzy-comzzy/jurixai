@@ -1,9 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
-import { 
-  Terminal, Play, Cpu, AlertTriangle, ShieldCheck, 
-  Info, Copy, Check, ExternalLink, RefreshCw, Award, Code, Globe, Star,
-  Upload, FileText
+import {
+  Terminal,
+  Play,
+  Cpu,
+  AlertTriangle,
+  ShieldCheck,
+  Info,
+  Copy,
+  Check,
+  ExternalLink,
+  RefreshCw,
+  Award,
+  Code,
+  Globe,
+  Star,
+  Upload,
+  FileText,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CHAIN_NAME } from "@/lib/chain";
@@ -42,8 +56,8 @@ function Playground() {
   const networkName = isXLayer
     ? "X Layer Mainnet"
     : CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
-    ? "Polygon Amoy"
-    : "Arc Testnet";
+      ? "Polygon Amoy"
+      : "Arc Testnet";
 
   const [tab, setTab] = useState<"single" | "batch">("single");
   const [githubUrl, setGithubUrl] = useState("");
@@ -60,7 +74,7 @@ function Playground() {
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [expandedRepoIndex, setExpandedRepoIndex] = useState<number | null>(null);
-  
+
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll terminal logs
@@ -71,10 +85,13 @@ function Playground() {
   }, [terminalLogs]);
 
   const operatorAddress = "0x5A305347b6BC3469505886d87D41C5EFC1A5E979";
-  const parsedUrls = rawUrls.split("\n").map(u => u.trim()).filter(u => u.length > 0 && (u.startsWith("http://") || u.startsWith("https://")));
+  const parsedUrls = rawUrls
+    .split("\n")
+    .map((u) => u.trim())
+    .filter((u) => u.length > 0 && (u.startsWith("http://") || u.startsWith("https://")));
   const batchRepoCount = parsedUrls.length;
   const currentRepoCount = tab === "single" ? 1 : batchRepoCount;
-  const dynamicRequiredUsdt = (currentRepoCount * 0.50).toFixed(2);
+  const dynamicRequiredUsdt = (currentRepoCount * 0.5).toFixed(2);
 
   const handleCopyAddr = () => {
     navigator.clipboard.writeText(operatorAddress);
@@ -88,6 +105,80 @@ function Playground() {
     setIsAmountCopied(true);
     toast.success("Amount copied to clipboard!");
     setTimeout(() => setIsAmountCopied(false), 2000);
+  };
+
+  const handleDownloadReport = () => {
+    if (!result) return;
+
+    let content = "";
+    const isSingle = Boolean(result.githubUrl);
+
+    if (isSingle) {
+      content += `# JuriXAI Audit Verdict Report\n\n`;
+      content += `- **Repository:** ${result.githubUrl}\n`;
+      content += `- **Execution Mode:** ${result.txHash === "sandbox_mode" ? "Sandbox (Free)" : "Live (Paid)"}\n`;
+      if (result.txHash && result.txHash !== "sandbox_mode") {
+        content += `- **Transaction Hash:** ${result.txHash}\n`;
+      }
+      content += `- **Average Score:** ${result.averageScore} / 10\n\n`;
+      content += `## Agent Evaluations\n\n`;
+
+      result.evaluations?.forEach((ev) => {
+        content += `### ${ev.agent} (${ev.role})\n`;
+        content += `- **Score:** ${ev.score} / 10\n`;
+        content += `- **Confidence:** ${(ev.confidence * 100).toFixed(0)}%\n\n`;
+        content += `#### Rationale:\n${ev.rationale}\n\n`;
+
+        if (ev.evidence && ev.evidence.length > 0) {
+          content += `#### Evidence:\n`;
+          ev.evidence.forEach((item) => {
+            content += `- ${item}\n`;
+          });
+          content += `\n`;
+        }
+
+        if (ev.flags && ev.flags.length > 0) {
+          content += `#### Flags / Warnings:\n`;
+          ev.flags.forEach((flag) => {
+            content += `- ${flag}\n`;
+          });
+          content += `\n`;
+        }
+
+        content += `---\n\n`;
+      });
+    } else {
+      content += `# JuriXAI Batch Audit Verdict Report\n\n`;
+      content += `- **Execution Mode:** ${result.txHash === "sandbox_mode" ? "Sandbox (Free)" : "Live (Paid)"}\n`;
+      if (result.txHash && result.txHash !== "sandbox_mode") {
+        content += `- **Transaction Hash:** ${result.txHash}\n`;
+      }
+      content += `- **Total Repositories:** ${result.repoCount}\n\n`;
+
+      result.results?.forEach((repo) => {
+        content += `## Repository: ${repo.githubUrl}\n`;
+        content += `- **Average Score:** ${repo.averageScore} / 10\n\n`;
+        content += `### Evaluations:\n\n`;
+
+        repo.evaluations.forEach((ev) => {
+          content += `#### ${ev.agent} (${ev.role})\n`;
+          content += `- **Score:** ${ev.score} / 10\n\n`;
+          content += `##### Rationale:\n${ev.rationale}\n\n`;
+          content += `---\n\n`;
+        });
+        content += `\n`;
+      });
+    }
+
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `jurixai_audit_report_${Date.now()}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Markdown report downloaded successfully!");
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,23 +201,23 @@ function Playground() {
     if (isLive) {
       logs.push(`⏳ Connecting to ${networkName} RPC node...`);
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 600));
       logs.push(`🔍 Checking transaction hash: ${txHash.slice(0, 12)}...`);
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 800));
       logs.push(`✅ Payment transaction verified successfully on ${networkName}!`);
-      logs.push(`💰 Amount received: ${(urls.length * 0.50).toFixed(2)} ${tokenSymbol}`);
+      logs.push(`💰 Amount received: ${(urls.length * 0.5).toFixed(2)} ${tokenSymbol}`);
     } else {
       logs.push("🧪 Running in SANDBOX MODE (Simulated Payment)...");
     }
-    
+
     setTerminalLogs([...logs]);
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 400));
 
     if (isBatch) {
       logs.push(`📦 Starting batch evaluation of ${urls.length} repositories...`);
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 600));
 
       for (let idx = 0; idx < urls.length; idx++) {
         const url = urls[idx];
@@ -135,12 +226,12 @@ function Playground() {
         logs.push(`📂 [Repo ${idx + 1}/${urls.length}] Auditing: ${displayUrl}`);
         logs.push("🧬 Reading project structure, package.json, and configuration files...");
         setTerminalLogs([...logs]);
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800));
 
         logs.push(`⚖️ Running JuriXAI 4-Agent Panel Audit...`);
         logs.push("🤖 [Vex] Analyzing code quality, patterns, security...");
         setTerminalLogs([...logs]);
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 600));
 
         if (!isLive) {
           logs.push("🔒 Sandbox mode enabled: Kael, Oryn, and Zera reviews are locked.");
@@ -149,7 +240,7 @@ function Playground() {
           logs.push("🤖 [Oryn] Auditing innovation and originality...");
           logs.push("🤖 [Zera] Checking shipping quality and documentation...");
           setTerminalLogs([...logs]);
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, 1000));
         }
 
         logs.push(`✅ [Repo ${idx + 1}/${urls.length}] Audit complete.`);
@@ -158,33 +249,35 @@ function Playground() {
     } else {
       logs.push("📂 Contacting GitHub API to retrieve repository metadata...");
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 600));
-  
+      await new Promise((r) => setTimeout(r, 600));
+
       logs.push("📁 Repository cloned into secure sandboxed memory.");
       logs.push("🧬 Reading project structure, package.json, and configuration files...");
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 800));
-  
+      await new Promise((r) => setTimeout(r, 800));
+
       logs.push("⚖️ Invoking specialized AI Judge Agents...");
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 400));
-  
+      await new Promise((r) => setTimeout(r, 400));
+
       logs.push("🤖 [Vex] Analyzing code quality, patterns, security, and dependencies...");
       setTerminalLogs([...logs]);
-      await new Promise(r => setTimeout(r, 800));
-  
+      await new Promise((r) => setTimeout(r, 800));
+
       if (isLive) {
         logs.push("🤖 [Kael] Evaluating product UX, core features, and problem-solution fit...");
         setTerminalLogs([...logs]);
-        await new Promise(r => setTimeout(r, 600));
-  
+        await new Promise((r) => setTimeout(r, 600));
+
         logs.push("🤖 [Oryn] Auditing code innovation, originality, and uniqueness...");
         setTerminalLogs([...logs]);
-        await new Promise(r => setTimeout(r, 600));
-  
-        logs.push("🤖 [Zera] Checking shipping quality, reproducibility, documentation, and README...");
+        await new Promise((r) => setTimeout(r, 600));
+
+        logs.push(
+          "🤖 [Zera] Checking shipping quality, reproducibility, documentation, and README...",
+        );
         setTerminalLogs([...logs]);
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800));
       } else {
         logs.push("🔒 Sandbox mode active: non-Vex agents are locked.");
       }
@@ -192,11 +285,11 @@ function Playground() {
 
     logs.push("📊 Consolidating scores and compiling feedback matrix...");
     setTerminalLogs([...logs]);
-    await new Promise(r => setTimeout(r, 500));
- 
+    await new Promise((r) => setTimeout(r, 500));
+
     logs.push("🎉 Analysis complete! Generating report details...");
     setTerminalLogs([...logs]);
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
   };
 
   const handleAnalyze = async (e: React.FormEvent) => {
@@ -223,21 +316,22 @@ function Playground() {
     const runLogsPromise = runSimulatedLogs(mode === "live", tab === "batch", activeUrls);
 
     try {
-      const payload = tab === "single"
-        ? {
-            githubUrl: githubUrl.trim(),
-            description: description.trim(),
-            txHash: mode === "live" ? txHash.trim() : undefined,
-            sandbox: mode === "sandbox",
-            chain: CHAIN_NAME,
-          }
-        : {
-            githubUrls: parsedUrls,
-            description: description.trim(),
-            txHash: mode === "live" ? txHash.trim() : undefined,
-            sandbox: mode === "sandbox",
-            chain: CHAIN_NAME,
-          };
+      const payload =
+        tab === "single"
+          ? {
+              githubUrl: githubUrl.trim(),
+              description: description.trim(),
+              txHash: mode === "live" ? txHash.trim() : undefined,
+              sandbox: mode === "sandbox",
+              chain: CHAIN_NAME,
+            }
+          : {
+              githubUrls: parsedUrls,
+              description: description.trim(),
+              txHash: mode === "live" ? txHash.trim() : undefined,
+              sandbox: mode === "sandbox",
+              chain: CHAIN_NAME,
+            };
 
       const res = await fetch("/api/judge", {
         method: "POST",
@@ -253,11 +347,17 @@ function Playground() {
         throw new Error(data.error || "Analysis failed.");
       }
 
-      setResult(data);
+      setResult({
+        ...data,
+        txHash: data.txHash || (mode === "live" ? txHash.trim() : "sandbox_mode"),
+      });
       toast.success("Analysis report generated successfully!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Repository analysis failed.");
-      setTerminalLogs(prev => [...prev, `❌ ERROR: ${err instanceof Error ? err.message : "Judging pipeline failed."}`]);
+      setTerminalLogs((prev) => [
+        ...prev,
+        `❌ ERROR: ${err instanceof Error ? err.message : "Judging pipeline failed."}`,
+      ]);
     } finally {
       setIsAnalyzing(false);
     }
@@ -275,7 +375,7 @@ function Playground() {
           AI Judge-as-a-Service <span className="text-muted-foreground">Playground</span>
         </h1>
         <p className="text-lg text-muted-foreground">
-          Deploy and run instant multi-agent audits on any project. Evaluate code structure, 
+          Deploy and run instant multi-agent audits on any project. Evaluate code structure,
           product-market fit, innovation, and documentation polish using pay-per-call.
         </p>
       </header>
@@ -312,7 +412,6 @@ function Playground() {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
         {/* Left column: Setup */}
         <div className="lg:col-span-5 space-y-6">
           <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -320,7 +419,7 @@ function Playground() {
               <Terminal className="size-5 text-accent" />
               Configure Evaluation
             </h2>
-            
+
             <form onSubmit={handleAnalyze} className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -362,22 +461,34 @@ function Playground() {
                         Micro-payment required to trigger judging:
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-1">
-                        Send exactly <strong className="text-foreground">{dynamicRequiredUsdt} {tokenSymbol}</strong> to the JuriXAI operator address on {networkName}.
+                        Send exactly{" "}
+                        <strong className="text-foreground">
+                          {dynamicRequiredUsdt} {tokenSymbol}
+                        </strong>{" "}
+                        to the JuriXAI operator address on {networkName}.
                       </p>
                     </div>
                   </div>
 
                   <div className="space-y-2 mt-2">
                     <div className="flex items-center justify-between bg-muted/60 p-2 rounded border border-border/40">
-                      <span className="text-[10px] font-mono text-muted-foreground">Recipient (Operator)</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        Recipient (Operator)
+                      </span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono text-foreground">{operatorAddress.slice(0, 6)}...{operatorAddress.slice(-4)}</span>
+                        <span className="text-[10px] font-mono text-foreground">
+                          {operatorAddress.slice(0, 6)}...{operatorAddress.slice(-4)}
+                        </span>
                         <button
                           type="button"
                           onClick={handleCopyAddr}
                           className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                         >
-                          {isCopied ? <Check className="size-3 text-accent" /> : <Copy className="size-3" />}
+                          {isCopied ? (
+                            <Check className="size-3 text-accent" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -385,13 +496,19 @@ function Playground() {
                     <div className="flex items-center justify-between bg-muted/60 p-2 rounded border border-border/40">
                       <span className="text-[10px] font-mono text-muted-foreground">Total Fee</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono text-foreground">{dynamicRequiredUsdt} {tokenSymbol}</span>
+                        <span className="text-[10px] font-mono text-foreground">
+                          {dynamicRequiredUsdt} {tokenSymbol}
+                        </span>
                         <button
                           type="button"
                           onClick={handleCopyAmount}
                           className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                         >
-                          {isAmountCopied ? <Check className="size-3 text-accent" /> : <Copy className="size-3" />}
+                          {isAmountCopied ? (
+                            <Check className="size-3 text-accent" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -441,16 +558,22 @@ function Playground() {
                       />
                       <Upload className="size-6 text-muted-foreground mb-2" />
                       <span className="text-xs text-muted-foreground font-semibold">
-                        {selectedFile ? selectedFile.name : "Drag & drop or click to upload txt list"}
+                        {selectedFile
+                          ? selectedFile.name
+                          : "Drag & drop or click to upload txt list"}
                       </span>
-                      <span className="text-[10px] text-muted-foreground mt-1">One URL per line</span>
+                      <span className="text-[10px] text-muted-foreground mt-1">
+                        One URL per line
+                      </span>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center justify-between">
                       <span>Or Paste Repository URLs</span>
-                      <span className="text-[10px] text-accent lowercase">({batchRepoCount} detected)</span>
+                      <span className="text-[10px] text-accent lowercase">
+                        ({batchRepoCount} detected)
+                      </span>
                     </label>
                     <textarea
                       placeholder="https://github.com/owner/repo-1&#10;https://github.com/owner/repo-2&#10;https://github.com/owner/repo-3"
@@ -497,7 +620,6 @@ function Playground() {
 
         {/* Right column: Terminal Output / Results */}
         <div className="lg:col-span-7 space-y-6">
-          
           {/* Live Terminal Logging */}
           {(isAnalyzing || terminalLogs.length > 0) && (
             <div className="rounded-xl border border-border bg-black p-5 shadow-inner font-mono text-xs text-green-400 min-h-[220px] flex flex-col justify-between">
@@ -510,7 +632,7 @@ function Playground() {
                 </span>
                 <span>UTC-2026</span>
               </div>
-              
+
               <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[260px] pr-2">
                 {terminalLogs.map((log, index) => (
                   <div key={index} className="leading-relaxed">
@@ -534,20 +656,45 @@ function Playground() {
               {result.githubUrl ? (
                 // Single Audit View
                 <>
-                  <div className="flex items-center justify-between border-b border-border pb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
                     <div>
                       <h2 className="text-xl font-bold flex items-center gap-2">
                         <Award className="size-5.5 text-accent" />
                         Verdict Report
                       </h2>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Evaluated repository: <a href={result.githubUrl} target="_blank" rel="noreferrer" className="text-accent underline font-mono hover:opacity-85 inline-flex items-center gap-1">{result.githubUrl.replace("https://github.com/", "")} <ExternalLink className="size-3" /></a>
+                        Evaluated repository:{" "}
+                        <a
+                          href={result.githubUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-accent underline font-mono hover:opacity-85 inline-flex items-center gap-1"
+                        >
+                          {result.githubUrl.replace("https://github.com/", "")}{" "}
+                          <ExternalLink className="size-3" />
+                        </a>
                       </p>
                     </div>
-                    
-                    <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-accent/20 bg-accent/5">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Score</span>
-                      <span className="text-2xl font-bold text-accent italic mt-0.5">{result.averageScore} <span className="text-xs text-muted-foreground">/10</span></span>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleDownloadReport}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-border bg-muted/60 hover:bg-muted text-foreground transition-all cursor-pointer"
+                      >
+                        <Download className="size-3.5 text-accent" />
+                        Download Report
+                      </button>
+
+                      <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-accent/20 bg-accent/5">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          Avg Score
+                        </span>
+                        <span className="text-2xl font-bold text-accent italic mt-0.5">
+                          {result.averageScore}{" "}
+                          <span className="text-xs text-muted-foreground">/10</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -555,19 +702,29 @@ function Playground() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {result.evaluations?.map((ev) => {
                       let agentColor = "text-accent border-accent/20 bg-accent/5";
-                      if (ev.agent === "Kael") agentColor = "text-blue-400 border-blue-400/20 bg-blue-400/5";
-                      if (ev.agent === "Oryn") agentColor = "text-purple-400 border-purple-400/20 bg-purple-400/5";
-                      if (ev.agent === "Zera") agentColor = "text-red-400 border-red-400/20 bg-red-400/5";
+                      if (ev.agent === "Kael")
+                        agentColor = "text-blue-400 border-blue-400/20 bg-blue-400/5";
+                      if (ev.agent === "Oryn")
+                        agentColor = "text-purple-400 border-purple-400/20 bg-purple-400/5";
+                      if (ev.agent === "Zera")
+                        agentColor = "text-red-400 border-red-400/20 bg-red-400/5";
 
                       return (
-                        <div key={ev.agent} className="border border-border rounded-xl p-5 hover:border-border/80 transition-all flex flex-col justify-between">
+                        <div
+                          key={ev.agent}
+                          className="border border-border rounded-xl p-5 hover:border-border/80 transition-all flex flex-col justify-between"
+                        >
                           <div>
                             <div className="flex items-start justify-between mb-3.5">
                               <div>
                                 <span className="text-sm font-bold">{ev.agent}</span>
-                                <span className="block text-[10px] text-muted-foreground mt-0.5">{ev.role}</span>
+                                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                                  {ev.role}
+                                </span>
                               </div>
-                              <span className={`text-xs font-mono font-bold px-2 py-1 rounded border ${agentColor}`}>
+                              <span
+                                className={`text-xs font-mono font-bold px-2 py-1 rounded border ${agentColor}`}
+                              >
                                 {ev.score} / 10
                               </span>
                             </div>
@@ -579,7 +736,10 @@ function Playground() {
                           {/* Evidence & Flags summary */}
                           <div className="space-y-2 pt-3 border-t border-border/40">
                             {ev.evidence.slice(0, 2).map((item, idx) => (
-                              <div key={idx} className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
+                              <div
+                                key={idx}
+                                className="flex items-start gap-1.5 text-[10px] text-muted-foreground"
+                              >
                                 <span className="text-accent mt-0.5 shrink-0">•</span>
                                 <span className="truncate">{item}</span>
                               </div>
@@ -598,11 +758,15 @@ function Playground() {
 
                   {/* Unified Verdict Details */}
                   <div className="space-y-4 pt-4 border-t border-border">
-                    <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">Detailed Agent Rationale</h3>
+                    <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Detailed Agent Rationale
+                    </h3>
                     <div className="space-y-4">
                       {result.evaluations?.map((ev) => (
                         <div key={ev.agent} className="space-y-1.5">
-                          <span className="text-xs font-bold text-foreground">{ev.agent} ({ev.role}):</span>
+                          <span className="text-xs font-bold text-foreground">
+                            {ev.agent} ({ev.role}):
+                          </span>
                           <p className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-border/60">
                             {ev.rationale}
                           </p>
@@ -624,24 +788,47 @@ function Playground() {
                         Audited {result.repoCount} repositories in batch
                       </p>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={handleDownloadReport}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-border bg-muted/60 hover:bg-muted text-foreground transition-all cursor-pointer"
+                    >
+                      <Download className="size-3.5 text-accent" />
+                      Download Report
+                    </button>
                   </div>
 
                   <div className="space-y-4">
                     {result.results?.map((repo, idx) => (
-                      <div key={idx} className="border border-border rounded-xl p-5 hover:border-border/80 transition-all space-y-4">
+                      <div
+                        key={idx}
+                        className="border border-border rounded-xl p-5 hover:border-border/80 transition-all space-y-4"
+                      >
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-sm font-bold block">{repo.githubUrl.replace("https://github.com/", "")}</span>
-                            <a href={repo.githubUrl} target="_blank" rel="noreferrer" className="text-[10px] text-accent underline hover:opacity-85 inline-flex items-center gap-0.5">Visit Repo <ExternalLink className="size-2.5" /></a>
+                            <span className="text-sm font-bold block">
+                              {repo.githubUrl.replace("https://github.com/", "")}
+                            </span>
+                            <a
+                              href={repo.githubUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-accent underline hover:opacity-85 inline-flex items-center gap-0.5"
+                            >
+                              Visit Repo <ExternalLink className="size-2.5" />
+                            </a>
                           </div>
-                          
+
                           <div className="flex items-center gap-4">
                             <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded border border-accent/20 bg-accent/5 italic">
                               {repo.averageScore} / 10
                             </span>
                             <button
                               type="button"
-                              onClick={() => setExpandedRepoIndex(expandedRepoIndex === idx ? null : idx)}
+                              onClick={() =>
+                                setExpandedRepoIndex(expandedRepoIndex === idx ? null : idx)
+                              }
                               className="text-xs font-semibold text-muted-foreground hover:text-foreground underline transition-colors cursor-pointer"
                             >
                               {expandedRepoIndex === idx ? "Hide Details" : "Show Details"}
@@ -653,19 +840,29 @@ function Playground() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border/40 animate-fade-in">
                             {repo.evaluations.map((ev) => {
                               let agentColor = "text-accent border-accent/20 bg-accent/5";
-                              if (ev.agent === "Kael") agentColor = "text-blue-400 border-blue-400/20 bg-blue-400/5";
-                              if (ev.agent === "Oryn") agentColor = "text-purple-400 border-purple-400/20 bg-purple-400/5";
-                              if (ev.agent === "Zera") agentColor = "text-red-400 border-red-400/20 bg-red-400/5";
+                              if (ev.agent === "Kael")
+                                agentColor = "text-blue-400 border-blue-400/20 bg-blue-400/5";
+                              if (ev.agent === "Oryn")
+                                agentColor = "text-purple-400 border-purple-400/20 bg-purple-400/5";
+                              if (ev.agent === "Zera")
+                                agentColor = "text-red-400 border-red-400/20 bg-red-400/5";
 
                               return (
-                                <div key={ev.agent} className="border border-border rounded-xl p-4 flex flex-col justify-between">
+                                <div
+                                  key={ev.agent}
+                                  className="border border-border rounded-xl p-4 flex flex-col justify-between"
+                                >
                                   <div>
                                     <div className="flex items-start justify-between mb-2">
                                       <div>
                                         <span className="text-xs font-bold">{ev.agent}</span>
-                                        <span className="block text-[9px] text-muted-foreground">{ev.role}</span>
+                                        <span className="block text-[9px] text-muted-foreground">
+                                          {ev.role}
+                                        </span>
                                       </div>
-                                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${agentColor}`}>
+                                      <span
+                                        className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${agentColor}`}
+                                      >
                                         {ev.score} / 10
                                       </span>
                                     </div>
@@ -692,15 +889,18 @@ function Playground() {
                   </div>
                   <div>
                     <span className="text-xs font-bold block">Developer API Usage</span>
-                    <span className="text-[10px] text-muted-foreground block">Call this service programmatically using cURL or HTTP request</span>
+                    <span className="text-[10px] text-muted-foreground block">
+                      Call this service programmatically using cURL or HTTP request
+                    </span>
                   </div>
                 </div>
 
                 <div className="w-full md:w-auto font-mono text-[9px] bg-black p-2.5 rounded border border-border/30 text-green-400 overflow-x-auto select-all">
-                  {"curl -X POST https://jurixai.xyz/api/judge -d '{\"githubUrls\":[\"...\"], \"txHash\":\"...\"}'"}
+                  {
+                    'curl -X POST https://jurixai.xyz/api/judge -d \'{"githubUrls":["..."], "txHash":"..."}\''
+                  }
                 </div>
               </div>
-
             </div>
           )}
 
@@ -712,13 +912,12 @@ function Playground() {
               </div>
               <h3 className="text-foreground font-bold mb-1">Waiting for Analysis</h3>
               <p className="max-w-xs text-xs text-muted-foreground leading-relaxed">
-                Provide one or more GitHub repository links on the left panel to trigger evaluations from our four autonomous agents.
+                Provide one or more GitHub repository links on the left panel to trigger evaluations
+                from our four autonomous agents.
               </p>
             </div>
           )}
-
         </div>
-
       </div>
     </div>
   );
