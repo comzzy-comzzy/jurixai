@@ -18,6 +18,7 @@ import {
   Upload,
   FileText,
   Download,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CHAIN_NAME } from "@/lib/chain";
@@ -68,6 +69,19 @@ function Playground() {
   const [txHash, setTxHash] = useState("");
   const [isCopied, setIsCopied] = useState(false);
   const [isAmountCopied, setIsAmountCopied] = useState(false);
+
+  const [history, setHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("jurixai_audit_history");
+    if (stored) {
+      try {
+        setHistory(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to parse audit history", e);
+      }
+    }
+  }, []);
 
   // Execution states
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -307,6 +321,21 @@ function Playground() {
       return;
     }
 
+    if (mode === "live" && txHash.trim()) {
+      const existing = history.find((h) => h.txHash?.toLowerCase() === txHash.trim().toLowerCase());
+      if (existing) {
+        setIsAnalyzing(true);
+        setResult(existing.result);
+        setTerminalLogs([
+          `🔍 Found transaction hash in history: ${txHash.slice(0, 12)}...`,
+          `⚡ Restored audit report from local storage history!`,
+        ]);
+        toast.success("Restored analysis report from history!");
+        setIsAnalyzing(false);
+        return;
+      }
+    }
+
     setIsAnalyzing(true);
     setResult(null);
     setTerminalLogs([]);
@@ -347,11 +376,30 @@ function Playground() {
         throw new Error(data.error || "Analysis failed.");
       }
 
-      setResult({
+      const newResult = {
         ...data,
         txHash: data.txHash || (mode === "live" ? txHash.trim() : "sandbox_mode"),
-      });
+      };
+      setResult(newResult);
       toast.success("Analysis report generated successfully!");
+
+      // Save to audit history
+      const historyItem = {
+        txHash: newResult.txHash,
+        githubUrl: tab === "single" ? githubUrl.trim() : undefined,
+        githubUrls: tab === "batch" ? parsedUrls : undefined,
+        timestamp: new Date().toISOString(),
+        result: newResult,
+      };
+
+      setHistory((prev) => {
+        const filtered = prev.filter(
+          (item) => item.txHash !== historyItem.txHash || item.txHash === "sandbox_mode",
+        );
+        const updated = [historyItem, ...filtered].slice(0, 10);
+        localStorage.setItem("jurixai_audit_history", JSON.stringify(updated));
+        return updated;
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Repository analysis failed.");
       setTerminalLogs((prev) => [
@@ -616,6 +664,70 @@ function Playground() {
               </button>
             </form>
           </div>
+
+          {history.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4 animate-slide-in">
+              <h2 className="text-sm font-bold flex items-center gap-2 uppercase tracking-wider text-muted-foreground">
+                <History className="size-4 text-accent animate-pulse" />
+                Recent Audits History
+              </h2>
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                {history.map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setResult(item.result);
+                      setTab(item.githubUrls ? "batch" : "single");
+                      if (item.githubUrl) setGithubUrl(item.githubUrl);
+                      if (item.githubUrls) setRawUrls(item.githubUrls.join("\n"));
+                      setTxHash(item.txHash === "sandbox_mode" ? "" : item.txHash);
+                      setMode(item.txHash === "sandbox_mode" ? "sandbox" : "live");
+                      setTerminalLogs([
+                        `📂 Loaded audit report for: ${item.githubUrl || `${item.githubUrls?.length} repos`}`,
+                        `🕒 Audited on: ${new Date(item.timestamp).toLocaleString()}`,
+                      ]);
+                      toast.success("Loaded audit report from history!");
+                    }}
+                    className="w-full text-left p-2.5 rounded-lg border border-border/40 hover:border-accent/40 bg-muted/30 hover:bg-accent/5 transition-all text-xs flex items-center justify-between gap-3 group cursor-pointer"
+                  >
+                    <div className="truncate flex-1">
+                      <span className="font-semibold block text-foreground group-hover:text-accent truncate">
+                        {item.githubUrl
+                          ? item.githubUrl.replace("https://github.com/", "")
+                          : `${item.githubUrls?.length} repositories`}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-0.5 font-mono truncate">
+                        {item.txHash === "sandbox_mode"
+                          ? "Sandbox Mode"
+                          : `Tx: ${item.txHash.slice(0, 8)}...${item.txHash.slice(-6)}`}
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] font-bold text-accent block">
+                        {item.result.averageScore || item.result.results?.[0]?.averageScore || 0} /
+                        10
+                      </span>
+                      <span className="text-[8px] text-muted-foreground block mt-0.5">
+                        {new Date(item.timestamp).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem("jurixai_audit_history");
+                  setHistory([]);
+                  toast.success("Audit history cleared!");
+                }}
+                className="w-full text-center text-[10px] font-semibold text-muted-foreground hover:text-red-400 transition-colors uppercase tracking-wider pt-2 border-t border-border/40 cursor-pointer"
+              >
+                Clear History
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right column: Terminal Output / Results */}
