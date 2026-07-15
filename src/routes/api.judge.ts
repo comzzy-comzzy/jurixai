@@ -50,7 +50,7 @@ const AGENT_CRITERIA_MAP = {
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
     const body = await request.json();
-    const { githubUrl, githubUrls, description, txHash, sandbox } = body;
+    const { githubUrl, githubUrls, description, txHash, sandbox, agents: requestedAgentSlugs } = body;
     let paymentData: any = null;
 
     if (!githubUrl && (!githubUrls || !Array.isArray(githubUrls) || githubUrls.length === 0)) {
@@ -64,6 +64,30 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const repoCount = urlsToAudit.length;
     const supabase = getSupabaseServerClient();
 
+    // Define pricing standard for individual agents (USDT, decimals=6)
+    const AGENTS_PRICING: Record<string, bigint> = {
+      "vex-01": 40000n,  // 0.04 USDT (Engineering)
+      "kael-02": 30000n, // 0.03 USDT (Product/UX)
+      "oryn-03": 20000n, // 0.02 USDT (Innovation)
+      "zera-04": 20000n, // 0.02 USDT (Completeness/Docs)
+    };
+
+    // Default to all active agents if not provided or empty
+    const defaultSlugs = ["vex-01", "kael-02", "oryn-03", "zera-04"];
+    const targetAgentSlugs = Array.isArray(requestedAgentSlugs) && requestedAgentSlugs.length > 0
+      ? requestedAgentSlugs.filter(slug => defaultSlugs.includes(slug))
+      : defaultSlugs;
+
+    if (targetAgentSlugs.length === 0) {
+      return Response.json(
+        { ok: false, error: "Invalid agents requested. Valid slugs are: vex-01, kael-02, oryn-03, zera-04" },
+        { status: 400 },
+      );
+    }
+
+    const feePerRepo = targetAgentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0n), 0n);
+    const expectedMin = feePerRepo * BigInt(repoCount);
+
     // 1. Verify payment on X Layer Mainnet if sandbox is false and txHash is provided
     if (!sandbox) {
       if (!txHash) {
@@ -71,13 +95,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
         const origin = requestUrl.origin;
         const endpointUrl = `${origin}/api/judge`;
         const operatorAddress = getOperatorAddress();
-        const amount = (110000 * repoCount).toString(); // 0.11 USDT per repository (decimals=6, split: Vex=0.04, Kael=0.03, Oryn=0.02, Zera=0.02)
+        const amount = expectedMin.toString();
 
         const challenge = {
           x402Version: 2,
           resource: {
             url: endpointUrl,
-            description: "JuriXAI Auditor: Autonomous multi-agent repository quality audit service.",
+            description: `JuriXAI Auditor: Modular multi-agent repository quality audit service (Agents: ${targetAgentSlugs.join(", ")}).`,
             mimeType: "application/json"
           },
           accepts: [
@@ -194,8 +218,6 @@ const handleJudge = async ({ request }: { request: Request }) => {
           );
         }
 
-        // Must be at least 0.11 tokens per repository (110000 base units per repo)
-        const expectedMin = 110000n * BigInt(repoCount);
         if (amount < expectedMin) {
           return Response.json(
             {
@@ -298,8 +320,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
         weighted_score: 0,
       };
 
-      // Run evaluations for all active agents in parallel for the current repository
-      const evalPromises = agents.map(async (agent) => {
+      const filteredAgents = agents.filter(agent => targetAgentSlugs.includes(agent.slug));
+      const evalPromises = filteredAgents.map(async (agent) => {
         const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
           name: `${agent.name} Evaluation`,
           description: agent.focus_area,
@@ -318,12 +340,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
         // In sandbox mode, lock non-Vex agents to enforce payment upgrade
         if (sandbox && agent.slug !== "vex-01") {
+          const individualCost = Number(AGENTS_PRICING[agent.slug] || 20000n) / 1000000;
           return {
             agent: agent.name,
             role: agent.role,
             score: 0,
             confidence: 0,
-            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send 0.11 USDT per repository to unlock the full 4-agent evaluation.`,
+            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 0.11 USDT to unlock the full 4-agent suite.`,
             evidence: [],
             flags: ["LOCKED_SANDBOX"],
           };

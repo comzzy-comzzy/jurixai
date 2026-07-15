@@ -70,6 +70,14 @@ function Playground() {
   const [isCopied, setIsCopied] = useState(false);
   const [isAmountCopied, setIsAmountCopied] = useState(false);
 
+  const [selectedAgentSlugs, setSelectedAgentSlugs] = useState<string[]>(["vex-01", "kael-02", "oryn-03", "zera-04"]);
+  const AGENTS_PRICING: Record<string, number> = {
+    "vex-01": 0.04,
+    "kael-02": 0.03,
+    "oryn-03": 0.02,
+    "zera-04": 0.02,
+  };
+
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
@@ -105,7 +113,8 @@ function Playground() {
     .filter((u) => u.length > 0 && (u.startsWith("http://") || u.startsWith("https://")));
   const batchRepoCount = parsedUrls.length;
   const currentRepoCount = tab === "single" ? 1 : batchRepoCount;
-  const dynamicRequiredUsdt = (currentRepoCount * 0.11).toFixed(2);
+  const feePerRepo = selectedAgentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0), 0);
+  const dynamicRequiredUsdt = (currentRepoCount * feePerRepo).toFixed(3);
 
   const handleCopyAddr = () => {
     navigator.clipboard.writeText(operatorAddress);
@@ -220,7 +229,7 @@ function Playground() {
       setTerminalLogs([...logs]);
       await new Promise((r) => setTimeout(r, 800));
       logs.push(`✅ Payment transaction verified successfully on ${networkName}!`);
-      logs.push(`💰 Amount received: ${(urls.length * 0.11).toFixed(2)} ${tokenSymbol}`);
+      logs.push(`💰 Amount received: ${(urls.length * feePerRepo).toFixed(3)} ${tokenSymbol}`);
     } else {
       logs.push("🧪 Running in SANDBOX MODE (Simulated Payment)...");
     }
@@ -353,6 +362,7 @@ function Playground() {
               txHash: mode === "live" ? txHash.trim() : undefined,
               sandbox: mode === "sandbox",
               chain: CHAIN_NAME,
+              agents: selectedAgentSlugs,
             }
           : {
               githubUrls: parsedUrls,
@@ -360,6 +370,7 @@ function Playground() {
               txHash: mode === "live" ? txHash.trim() : undefined,
               sandbox: mode === "sandbox",
               chain: CHAIN_NAME,
+              agents: selectedAgentSlugs,
             };
 
       const res = await fetch("/api/judge", {
@@ -469,6 +480,43 @@ function Playground() {
             </h2>
 
             <form onSubmit={handleAnalyze} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Select Scoring Agents
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(AGENTS_PRICING).map(([slug, price]) => {
+                    const agentName = slug === "vex-01" ? "Vex (Engineering)" : slug === "kael-02" ? "Kael (Product)" : slug === "oryn-03" ? "Oryn (Innovation)" : "Zera (Completeness)";
+                    const isSelected = selectedAgentSlugs.includes(slug);
+                    return (
+                      <button
+                        key={slug}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            if (selectedAgentSlugs.length > 1) {
+                              setSelectedAgentSlugs(selectedAgentSlugs.filter(s => s !== slug));
+                            } else {
+                              toast.error("At least one agent must be selected.");
+                            }
+                          } else {
+                            setSelectedAgentSlugs([...selectedAgentSlugs, slug]);
+                          }
+                        }}
+                        className={`p-2.5 text-left rounded-lg border text-xs flex flex-col justify-between h-20 transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-accent bg-accent/5 text-foreground shadow-sm"
+                            : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/80"
+                        }`}
+                      >
+                        <span className="font-bold block truncate">{agentName}</span>
+                        <span className="text-[10px] font-mono opacity-85">{price.toFixed(3)} USDT</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                   Execution Mode
