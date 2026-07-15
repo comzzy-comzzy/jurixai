@@ -36,7 +36,7 @@ graph TD
 ### 🏆 Model A: AI Judge-as-a-Service (A2MCP Model) — *Recommended*
 * **The Concept:** Package your 4 specialized judging agents (Technical, Product, Originality, Presentation) into a single, standardized API-like service.
 * **How it works on OKX.AI:** Other agents or external platforms (like Dorahacks or Gitcoin) call your agent with a project repository link and description. Your agent returns a structured JSON audit with scores and rationales.
-* **Pricing:** Standard **instant pay-per-call** (e.g. $0.50 USDT per analysis) via OKX Payment SDK.
+* **Pricing:** Standard **instant pay-per-call** (e.g. $0.11 USDT per analysis) via OKX Payment SDK.
 
 ### 🤖 Model B: The Autonomous Tournament / Hackathon Manager (A2A Model)
 * **The Concept:** An end-to-end autonomous agent that lets anyone launch a mini-hackathon or DAO proposal competition via a simple chat prompt.

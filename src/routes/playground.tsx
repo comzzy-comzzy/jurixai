@@ -105,7 +105,7 @@ function Playground() {
     .filter((u) => u.length > 0 && (u.startsWith("http://") || u.startsWith("https://")));
   const batchRepoCount = parsedUrls.length;
   const currentRepoCount = tab === "single" ? 1 : batchRepoCount;
-  const dynamicRequiredUsdt = (currentRepoCount * 0.5).toFixed(2);
+  const dynamicRequiredUsdt = (currentRepoCount * 0.11).toFixed(2);
 
   const handleCopyAddr = () => {
     navigator.clipboard.writeText(operatorAddress);
@@ -220,7 +220,7 @@ function Playground() {
       setTerminalLogs([...logs]);
       await new Promise((r) => setTimeout(r, 800));
       logs.push(`✅ Payment transaction verified successfully on ${networkName}!`);
-      logs.push(`💰 Amount received: ${(urls.length * 0.5).toFixed(2)} ${tokenSymbol}`);
+      logs.push(`💰 Amount received: ${(urls.length * 0.11).toFixed(2)} ${tokenSymbol}`);
     } else {
       logs.push("🧪 Running in SANDBOX MODE (Simulated Payment)...");
     }

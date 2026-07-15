@@ -67,9 +67,43 @@ const handleJudge = async ({ request }: { request: Request }) => {
     // 1. Verify payment on X Layer Mainnet if sandbox is false and txHash is provided
     if (!sandbox) {
       if (!txHash) {
-        return Response.json(
-          { ok: false, error: "Payment transaction hash is required for mainnet mode." },
-          { status: 402 },
+        const requestUrl = new URL(request.url);
+        const origin = requestUrl.origin;
+        const endpointUrl = `${origin}/api/judge`;
+        const operatorAddress = getOperatorAddress();
+        const amount = (110000 * repoCount).toString(); // 0.11 USDT per repository (decimals=6, split: Vex=0.04, Kael=0.03, Oryn=0.02, Zera=0.02)
+
+        const challenge = {
+          x402Version: 2,
+          resource: {
+            url: endpointUrl,
+            description: "JuriXAI Auditor: Autonomous multi-agent repository quality audit service.",
+            mimeType: "application/json"
+          },
+          accepts: [
+            {
+              scheme: "exact",
+              network: "eip155:196", // X Layer Mainnet
+              asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT0 on X Layer Mainnet
+              amount: amount,
+              payTo: operatorAddress,
+              maxTimeoutSeconds: 300,
+              extra: { name: "USD₮0", version: "1" }
+            }
+          ]
+        };
+
+        const challengeBase64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
+
+        return new Response(
+          JSON.stringify({ ok: false, error: "Payment transaction hash is required for mainnet mode." }),
+          {
+            status: 402,
+            headers: {
+              "Content-Type": "application/json",
+              "PAYMENT-REQUIRED": challengeBase64,
+            },
+          }
         );
       }
 
@@ -160,8 +194,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
           );
         }
 
-        // Must be at least 0.50 tokens per repository (500000 base units per repo)
-        const expectedMin = 500000n * BigInt(repoCount);
+        // Must be at least 0.11 tokens per repository (110000 base units per repo)
+        const expectedMin = 110000n * BigInt(repoCount);
         if (amount < expectedMin) {
           return Response.json(
             {
@@ -289,7 +323,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             role: agent.role,
             score: 0,
             confidence: 0,
-            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send 0.50 USDT per repository to unlock the full 4-agent evaluation.`,
+            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send 0.11 USDT per repository to unlock the full 4-agent evaluation.`,
             evidence: [],
             flags: ["LOCKED_SANDBOX"],
           };
