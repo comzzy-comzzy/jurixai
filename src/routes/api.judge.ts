@@ -207,6 +207,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
               amount: amount,
               payTo: operatorAddress,
               maxTimeoutSeconds: 300,
+              decimals: 6,
               extra: { name: "USD₮0", version: "1" }
             }
           ]
