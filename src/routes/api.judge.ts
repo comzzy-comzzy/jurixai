@@ -49,20 +49,111 @@ const AGENT_CRITERIA_MAP = {
 
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
-    const body = await request.json();
-    const { githubUrl, githubUrls, description, txHash, sandbox, agents: requestedAgentSlugs } = body;
-    let paymentData: any = null;
-
-    if (!githubUrl && (!githubUrls || !Array.isArray(githubUrls) || githubUrls.length === 0)) {
-      return Response.json(
-        { ok: false, error: "Missing githubUrl or githubUrls parameter." },
-        { status: 400 },
-      );
+    const url = new URL(request.url);
+    let body: any = {};
+    if (request.method === "POST" || request.method === "PUT") {
+      try {
+        body = await request.json();
+      } catch (e) {
+        body = {};
+      }
     }
 
-    const urlsToAudit = githubUrl ? [githubUrl] : (githubUrls as string[]);
-    const repoCount = urlsToAudit.length;
-    const supabase = getSupabaseServerClient();
+    const githubUrl = body.githubUrl || url.searchParams.get("githubUrl");
+    let githubUrls = body.githubUrls;
+    if (!githubUrls && url.searchParams.has("githubUrls")) {
+      const urlsParam = url.searchParams.get("githubUrls");
+      githubUrls = urlsParam ? urlsParam.split(",") : undefined;
+    }
+
+    const description = body.description || url.searchParams.get("description");
+
+    // Parse sandbox mode: defaults to false unless explicitly set to true
+    let sandbox = false;
+    if (body.sandbox !== undefined) {
+      sandbox = Boolean(body.sandbox);
+    } else if (url.searchParams.has("sandbox")) {
+      sandbox = url.searchParams.get("sandbox") === "true";
+    }
+
+    let requestedAgentSlugs = body.agents;
+    if (!requestedAgentSlugs && url.searchParams.has("agents")) {
+      const agentsParam = url.searchParams.get("agents");
+      requestedAgentSlugs = agentsParam ? agentsParam.split(",") : undefined;
+    }
+
+    let txHash = body.txHash || url.searchParams.get("txHash");
+
+    // Extract txHash from standard x402 headers if not in body/query params
+    if (!txHash) {
+      const headersToCheck = [
+        "PAYMENT-SIGNATURE",
+        "payment-signature",
+        "X-PAYMENT",
+        "x-payment",
+        "Authorization",
+        "authorization"
+      ];
+      for (const headerName of headersToCheck) {
+        const val = request.headers.get(headerName);
+        if (!val) continue;
+
+        const cleanVal = val.replace(/^(Payment|Bearer)\s+/i, "").trim();
+        if (cleanVal.startsWith("0x") && cleanVal.length === 66) {
+          txHash = cleanVal;
+          break;
+        }
+
+        // Try decoding as base64 JSON
+        try {
+          const decodedStr = Buffer.from(cleanVal, "base64").toString("utf-8");
+          if (decodedStr.includes("{")) {
+            const parsed = JSON.parse(decodedStr);
+            if (parsed.txHash) {
+              txHash = parsed.txHash;
+              break;
+            }
+            if (parsed.transaction) {
+              txHash = parsed.transaction;
+              break;
+            }
+            if (parsed.payload?.txHash) {
+              txHash = parsed.payload.txHash;
+              break;
+            }
+            if (parsed.payload?.transaction) {
+              txHash = parsed.payload.transaction;
+              break;
+            }
+            if (parsed.authorization) {
+              if (parsed.authorization.startsWith("0x") && parsed.authorization.length === 66) {
+                txHash = parsed.authorization;
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore and continue
+        }
+
+        // Try parsing raw JSON
+        if (cleanVal.includes("{")) {
+          try {
+            const parsed = JSON.parse(cleanVal);
+            if (parsed.txHash) {
+              txHash = parsed.txHash;
+              break;
+            }
+            if (parsed.transaction) {
+              txHash = parsed.transaction;
+              break;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    let paymentData: any = null;
 
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
@@ -85,8 +176,12 @@ const handleJudge = async ({ request }: { request: Request }) => {
       );
     }
 
+    const urlsToAudit = githubUrl ? [githubUrl] : (Array.isArray(githubUrls) ? githubUrls : []);
+    const repoCount = urlsToAudit.length || 1; // Default to 1 for pricing/challenge if empty
+
     const feePerRepo = targetAgentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0n), 0n);
     const expectedMin = feePerRepo * BigInt(repoCount);
+    const supabase = getSupabaseServerClient();
 
     // 1. Verify payment on X Layer Mainnet if sandbox is false and txHash is provided
     if (!sandbox) {
@@ -119,8 +214,14 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
         const challengeBase64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
 
+        const responseBody = {
+          ok: false,
+          error: "Payment transaction hash is required for mainnet mode.",
+          ...challenge
+        };
+
         return new Response(
-          JSON.stringify({ ok: false, error: "Payment transaction hash is required for mainnet mode." }),
+          JSON.stringify(responseBody),
           {
             status: 402,
             headers: {
@@ -430,6 +531,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
 export const Route = createFileRoute("/api/judge")({
   server: {
     handlers: {
+      GET: handleJudge,
       POST: handleJudge,
     },
   },
