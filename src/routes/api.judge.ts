@@ -226,13 +226,11 @@ const handleJudge = async ({ request }: { request: Request }) => {
             {
               scheme: "exact",
               network: "eip155:196", // X Layer Mainnet
+              asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT0 on X Layer Mainnet
+              amount: amount,
               payTo: operatorAddress,
-              price: {
-                amount: amount,
-                asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT0 on X Layer Mainnet
-                extra: { name: "USD₮0", version: "1", decimals: 6 }
-              },
-              maxTimeoutSeconds: 300
+              maxTimeoutSeconds: 300,
+              extra: { name: "USD₮0", version: "1" }
             }
           ]
         };
