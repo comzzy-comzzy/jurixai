@@ -4,6 +4,11 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createPublicClient, http, decodeFunctionData } from "viem";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
 import { getOperatorAddress } from "@/lib/chain.server";
+import {
+  processOkxPayment,
+  instructionsToResponse,
+  type OkxPaymentResult,
+} from "@/lib/x402/okx.server";
 import type {
   JudgeAgent,
   JudgingCriterion,
@@ -183,8 +188,26 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const expectedMin = feePerRepo * BigInt(repoCount);
     const supabase = getSupabaseServerClient();
 
-    // 1. Verify payment on X Layer Mainnet if sandbox is false and txHash is provided
-    if (!sandbox) {
+    // 1a. Standard x402 flow via the OKX Payment SDK (facilitator verify/settle).
+    // Runs whenever the caller did not supply a legacy on-chain txHash.
+    // - No PAYMENT-SIGNATURE header  -> standard 402 challenge (PAYMENT-REQUIRED header)
+    // - Valid PAYMENT-SIGNATURE      -> verified; settlement executes after the audit
+    // - OKX credentials/facilitator unavailable -> fall through to legacy challenge
+    let okxPayment: OkxPaymentResult | null = null;
+    if (!sandbox && !txHash) {
+      okxPayment = await processOkxPayment(request, body, {
+        agentSlugs: targetAgentSlugs,
+        repoCount,
+      });
+      if (okxPayment.type === "payment-error") {
+        return instructionsToResponse(okxPayment.response);
+      }
+    }
+    const okxVerified = okxPayment?.type === "payment-verified" ? okxPayment : null;
+
+    // 1b. Legacy flow: verify a direct USDT0 transfer on X Layer Mainnet by txHash.
+    // Also serves the manual 402 challenge when the OKX facilitator is unavailable.
+    if (!sandbox && !okxVerified) {
       if (!txHash) {
         const requestUrl = new URL(request.url);
         const origin = requestUrl.origin;
@@ -203,12 +226,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
             {
               scheme: "exact",
               network: "eip155:196", // X Layer Mainnet
-              asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT0 on X Layer Mainnet
-              amount: amount,
               payTo: operatorAddress,
-              maxTimeoutSeconds: 300,
-              decimals: 6,
-              extra: { name: "USD₮0", version: "1" }
+              price: {
+                amount: amount,
+                asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT0 on X Layer Mainnet
+                extra: { name: "USD₮0", version: "1", decimals: 6 }
+              },
+              maxTimeoutSeconds: 300
             }
           ]
         };
@@ -505,6 +529,28 @@ const handleJudge = async ({ request }: { request: Request }) => {
       });
     }
 
+    // Settle the standard x402 payment via the OKX facilitator now that the
+    // audit succeeded. On settlement failure the resource is NOT delivered.
+    let settlementHeaders: Record<string, string> = {};
+    if (okxVerified) {
+      const settleResult = await okxVerified.settle();
+      if (!settleResult.success) {
+        return instructionsToResponse(settleResult.response);
+      }
+      settlementHeaders = settleResult.headers;
+      if (settleResult.transaction) {
+        txHash = settleResult.transaction;
+      }
+      await supabase.from("payments").insert({
+        kind: "entry",
+        from_address: null,
+        to_address: getOperatorAddress(),
+        amount_usdc: Number(expectedMin) / 1000000,
+        circle_tx_id: settleResult.transaction || `x402-${Date.now()}`,
+        status: "confirmed",
+      });
+    }
+
     // Log payment in DB now that the evaluations succeeded
     if (!sandbox && paymentData) {
       await supabase.from("payments").insert(paymentData);
@@ -512,15 +558,18 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     const isSingle = Boolean(githubUrl);
 
-    return Response.json({
-      ok: true,
-      githubUrl: isSingle ? githubUrl : undefined,
-      txHash: txHash || "sandbox_mode",
-      evaluations: isSingle ? batchResults[0].evaluations : undefined,
-      averageScore: isSingle ? batchResults[0].averageScore : undefined,
-      results: !isSingle ? batchResults : undefined,
-      repoCount,
-    });
+    return Response.json(
+      {
+        ok: true,
+        githubUrl: isSingle ? githubUrl : undefined,
+        txHash: txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
+        evaluations: isSingle ? batchResults[0].evaluations : undefined,
+        averageScore: isSingle ? batchResults[0].averageScore : undefined,
+        results: !isSingle ? batchResults : undefined,
+        repoCount,
+      },
+      { headers: settlementHeaders },
+    );
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "Judging evaluation failed." },
