@@ -110,9 +110,10 @@ async function getBaseServer(): Promise<x402ResourceServer | null> {
 
 async function getCachedBaseServer(): Promise<x402ResourceServer | null> {
   if (!httpServerPromise) {
+    // Cache failures for the lifetime of this (serverless) instance so a
+    // misconfigured facilitator key doesn't add a doomed round-trip per request.
     httpServerPromise = getBaseServer().catch((err) => {
       console.error("[x402] OKX facilitator initialization failed:", err);
-      httpServerPromise = null; // allow retry on next request
       return null;
     }) as Promise<x402HTTPResourceServer | null>;
   }
