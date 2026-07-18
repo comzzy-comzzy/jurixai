@@ -1,5 +1,7 @@
 # AI Assistant Rules for JuriXAI
 
 When the user asks you to run, test, or generate an audit report for the JuriXAI Auditor:
-- ALWAYS print the full content of the audit report directly in your chat response (terminal window).
-- DO NOT hide the report or direct the user to a markdown artifact file (such as `jurixai_audit_report.md`) without displaying the full report content in the chat first. The user needs to see the audit results directly on their screen.
+1. ALWAYS print the full content of the audit report directly in your chat response (terminal window) first.
+2. AFTER printing it in the chat, save the report in a markdown file (such as `jurixai_audit_report.md` or the appropriate workspace/artifact folder).
+3. Let the user know clearly at the end of your response where the report file was saved.
+
