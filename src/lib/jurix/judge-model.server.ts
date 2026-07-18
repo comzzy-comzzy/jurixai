@@ -960,13 +960,36 @@ function validateEvaluation(raw: string): AgentEvaluation {
   };
 }
 
+const repoContextCache = new Map<string, Promise<RepoContext | null>>();
+
+async function loadRepoContextCached(githubUrl: string | null): Promise<RepoContext | null> {
+  if (!githubUrl) return null;
+  const normalized = githubUrl.trim().toLowerCase();
+
+  let promise = repoContextCache.get(normalized);
+  if (!promise) {
+    promise = loadRepoContext(githubUrl);
+    repoContextCache.set(normalized, promise);
+
+    // Evict after 30 seconds to prevent memory leak
+    promise.finally(() => {
+      setTimeout(() => {
+        if (repoContextCache.get(normalized) === promise) {
+          repoContextCache.delete(normalized);
+        }
+      }, 30000);
+    });
+  }
+  return promise;
+}
+
 export async function evaluateSubmissionWithModel(
   agent: JudgeAgent,
   criterion: JudgingCriterion,
   hackathon: HackathonSummary,
   submission: SubmissionSummary,
 ): Promise<AgentEvaluation> {
-  const repoContext = await loadRepoContext(submission.github_url);
+  const repoContext = await loadRepoContextCached(submission.github_url);
   const config = getJudgeModelConfig();
   const endpoint =
     config.provider === "minimax" || config.provider === "openai_compat"

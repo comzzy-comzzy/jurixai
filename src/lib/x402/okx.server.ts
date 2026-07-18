@@ -106,12 +106,19 @@ async function getBaseServer(): Promise<x402ResourceServer | null> {
   );
 
   // Wrap server.initialize() with a 3-second timeout to prevent requests from hanging if the OKX facilitator is slow/unreachable
+  let timeoutId: NodeJS.Timeout | undefined;
   const initPromise = server.initialize();
-  const timeoutPromise = new Promise<void>((_, reject) =>
-    setTimeout(() => reject(new Error("Timeout initializing OKX x402 server (3s limit reached)")), 3000)
-  );
+  const timeoutPromise = new Promise<void>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("Timeout initializing OKX x402 server (3s limit reached)")), 3000);
+  });
 
-  await Promise.race([initPromise, timeoutPromise]);
+  try {
+    await Promise.race([initPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
   return server;
 }
 
