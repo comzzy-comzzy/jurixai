@@ -81,7 +81,7 @@ ezinneagwu21@gmail.com
                │                                        │
                │         ┌──────────────────────────────┴───────────────┐
                │         ▼ (Evaluate Code / Docs / Innovation)          ▼ (Compute Workload Fee)
-               │   [ 0G AI Router / GLM-5.1 ]                    [ Circle Wallets API ]
+               │   [ 0G AI Router / GPT-5.6 Sol ]                    [ Circle Wallets API ]
                │         │                                              │
                │         ├─► Vex (Code Agent)                           │
                │         ├─► Kael (Product Agent)                       │

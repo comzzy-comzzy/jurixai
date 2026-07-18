@@ -69,7 +69,7 @@ graph TD
     end
 
     subgraph AI Layer
-        JudgeEngine -->|API Call| RouterAI[0G AI Router / GLM-5.1]
+        JudgeEngine -->|API Call| RouterAI[0G AI Router / GPT-5.6 Sol]
         RouterAI -->|deterministic evaluation / temp 0| Vex[Vex: Code Quality Agent]
         RouterAI -->|deterministic evaluation / temp 0| Kael[Kael: Product Value Agent]
         RouterAI -->|deterministic evaluation / temp 0| Oryn[Oryn: Innovation Agent]
