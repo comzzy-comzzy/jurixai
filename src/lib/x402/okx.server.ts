@@ -22,7 +22,7 @@ import { getOperatorAddress } from "@/lib/chain.server";
 
 export const XLAYER_NETWORK = "eip155:196" as const;
 export const USDT0_ASSET = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
-export const USDT0_EXTRA = { name: "USD₮0", version: "1" };
+export const USDT0_EXTRA = { name: "USDT", symbol: "USDT", decimals: 6, version: "1" };
 
 /** Per-agent pricing in USDT0 minimum units (6 decimals). */
 export const AGENTS_PRICING: Record<string, bigint> = {
@@ -68,8 +68,10 @@ function buildRouteConfig(params: JudgeRequestParams) {
     scheme: "exact",
     network: XLAYER_NETWORK,
     payTo: getOperatorAddress(),
-    price: { amount, asset: USDT0_ASSET, extra: { ...USDT0_EXTRA } },
+    price: { amount, asset: USDT0_ASSET, symbol: "USDT", decimals: 6, extra: { ...USDT0_EXTRA } },
     maxTimeoutSeconds: 300,
+    symbol: "USDT",
+    decimals: 6,
   };
   const description = `JuriXAI Auditor: Modular multi-agent repository quality audit service (Agents: ${params.agentSlugs.join(", ")}).`;
   return {
@@ -109,7 +111,10 @@ async function getBaseServer(): Promise<x402ResourceServer | null> {
   let timeoutId: NodeJS.Timeout | undefined;
   const initPromise = server.initialize();
   const timeoutPromise = new Promise<void>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("Timeout initializing OKX x402 server (3s limit reached)")), 3000);
+    timeoutId = setTimeout(
+      () => reject(new Error("Timeout initializing OKX x402 server (3s limit reached)")),
+      3000,
+    );
   });
 
   try {
