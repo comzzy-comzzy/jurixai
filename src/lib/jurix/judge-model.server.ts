@@ -897,7 +897,7 @@ async function requestJudgeModel(
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    }, 15000);
+    }, 60000);
 
     const bodyText = await response.text();
     let json: Record<string, unknown> | null = null;
