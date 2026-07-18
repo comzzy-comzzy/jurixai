@@ -249,14 +249,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       .map((u) => (typeof u === "string" ? u.trim() : ""))
       .filter(Boolean);
 
-    if (urlsToAudit.length === 0) {
-      return Response.json(
-        { ok: false, error: "No valid repository URL provided." },
-        { status: 400 }
-      );
-    }
-
-    const repoCount = urlsToAudit.length;
+    const repoCount = urlsToAudit.length || 1;
 
     const feePerRepo = targetAgentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0n), 0n);
     const expectedMin = feePerRepo * BigInt(repoCount);
@@ -445,7 +438,14 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
     }
 
-    // Validate project description AFTER payment is confirmed, but BEFORE starting evaluations.
+    // Validate repository count and project description AFTER payment is confirmed, but BEFORE starting evaluations.
+    if (urlsToAudit.length === 0) {
+      return Response.json(
+        { ok: false, error: "No valid repository URL provided." },
+        { status: 400 }
+      );
+    }
+
     if (!description || typeof description !== "string" || !description.trim()) {
       return Response.json(
         {
