@@ -119,10 +119,10 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     // Fallback to JuriXAI repository if absolutely no GitHub URL was supplied
     if (!githubUrl && (!githubUrls || githubUrls.length === 0)) {
-      githubUrl = "https://github.com/ezinneagwu/jurixai";
+      githubUrl = "https://github.com/comzzy-comzzy/jurixai";
       wasFallbackRepoUsed = true;
       description = description
-        ? `${description} (No GitHub URL provided, fell back to auditing: https://github.com/ezinneagwu/jurixai)`
+        ? `${description} (No GitHub URL provided, fell back to auditing: https://github.com/comzzy-comzzy/jurixai)`
         : "Automated audit of the JuriXAI repository (fallback mode).";
     }
 
@@ -243,48 +243,6 @@ const handleJudge = async ({ request }: { request: Request }) => {
         { ok: false, error: "No valid repository URL provided." },
         { status: 400 }
       );
-    }
-
-    // Validate repository URLs and check accessibility BEFORE starting evaluations or payment flow
-    for (const urlToAudit of urlsToAudit) {
-      const repoRef = parseGitHubRepo(urlToAudit);
-      if (!repoRef) {
-        return Response.json(
-          { ok: false, error: `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.` },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const checkUrl = `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`;
-        const response = await fetch(checkUrl, {
-          headers: {
-            accept: "application/vnd.github+json",
-            "user-agent": "jurixai-judge-bot",
-            ...(process.env.GITHUB_TOKEN?.trim()
-              ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-              : {}),
-          },
-        });
-        if (!response.ok) {
-          if (response.status === 404) {
-            return Response.json(
-              { ok: false, error: `GitHub repository is private or does not exist: ${urlToAudit}` },
-              { status: 404 }
-            );
-          } else {
-            return Response.json(
-              { ok: false, error: `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}` },
-              { status: response.status }
-            );
-          }
-        }
-      } catch (err) {
-        return Response.json(
-          { ok: false, error: `Failed to verify repository accessibility: ${err instanceof Error ? err.message : String(err)}` },
-          { status: 502 }
-        );
-      }
     }
 
     const repoCount = urlsToAudit.length;
@@ -472,6 +430,49 @@ const handleJudge = async ({ request }: { request: Request }) => {
               "Invalid transaction structure or decoding failed. Make sure it is a standard USDT transfer.",
           },
           { status: 400 },
+        );
+      }
+    }
+
+    // Validate repository URLs and check accessibility AFTER payment is confirmed,
+    // but BEFORE starting the evaluations.
+    for (const urlToAudit of urlsToAudit) {
+      const repoRef = parseGitHubRepo(urlToAudit);
+      if (!repoRef) {
+        return Response.json(
+          { ok: false, error: `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.` },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const checkUrl = `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`;
+        const response = await fetch(checkUrl, {
+          headers: {
+            accept: "application/vnd.github+json",
+            "user-agent": "jurixai-judge-bot",
+            ...(process.env.GITHUB_TOKEN?.trim()
+              ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+              : {}),
+          },
+        });
+        if (!response.ok) {
+          if (response.status === 404) {
+            return Response.json(
+              { ok: false, error: `GitHub repository is private or does not exist: ${urlToAudit}` },
+              { status: 404 }
+            );
+          } else {
+            return Response.json(
+              { ok: false, error: `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}` },
+              { status: response.status }
+            );
+          }
+        }
+      } catch (err) {
+        return Response.json(
+          { ok: false, error: `Failed to verify repository accessibility: ${err instanceof Error ? err.message : String(err)}` },
+          { status: 502 }
         );
       }
     }
