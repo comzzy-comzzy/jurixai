@@ -624,6 +624,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
       });
     }
 
+    if (batchResults.length === 0) {
+      return Response.json(
+        { ok: false, error: "Audit pipeline yielded no results." },
+        { status: 500 }
+      );
+    }
+
     // Settle the standard x402 payment via the OKX facilitator now that the
     // audit succeeded. On settlement failure the resource is NOT delivered.
     let settlementHeaders: Record<string, string> = {};
