@@ -99,6 +99,17 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     let description = body.description || url.searchParams.get("description");
 
+    const hackathonBrief =
+      body.hackathonBrief ||
+      body.brief ||
+      body.hackathonDescription ||
+      url.searchParams.get("hackathonBrief") ||
+      url.searchParams.get("brief");
+
+    const hackathonName =
+      body.hackathonName ||
+      url.searchParams.get("hackathonName");
+
     // If a user prompt was found, parse it for GitHub URLs and set description
     let wasFallbackRepoUsed = false;
     if (userPrompt) {
@@ -506,8 +517,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
     // 3. Prepare mock summaries for evaluation
     const hackathon: HackathonSummary = {
       id: "api-judging",
-      name: "API Judging Service",
-      description: "AI Judge-as-a-Service pay-per-call API invocation",
+      name: hackathonName || "API Judging Service",
+      description: hackathonBrief || "AI Judge-as-a-Service pay-per-call API invocation",
       submission_instructions: null,
       required_deliverables: ["github"],
       organizer_name: "JurixAI ASP",
