@@ -78,6 +78,14 @@ function extractAllGitHubUrls(obj: unknown): string[] {
   return [...new Set(urls)];
 }
 
+function normalizeGithubUrl(url: string): string {
+  return url
+    .trim()
+    .toLowerCase()
+    .replace(/\/$/, "") // remove trailing slash
+    .replace(/\.git$/, ""); // remove .git suffix
+}
+
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
     const url = new URL(request.url);
@@ -331,6 +339,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     } | null = null;
     let isReplay = false;
 
+
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
       "vex-01": 40000n, // 0.04 USDT (Engineering)
@@ -443,19 +452,30 @@ const handleJudge = async ({ request }: { request: Request }) => {
         });
       }
 
-      // Check if txHash has already been registered (indicates a replay attempt to retrieve results)
+      // Check if txHash has already been registered (prevents stealing/reusing transaction hashes)
       const { data: existingPayment } = await supabase
         .from("payments")
-        .select("id")
+        .select("id, from_address")
         .eq("circle_tx_id", txHash)
         .maybeSingle();
 
       if (existingPayment) {
-        isReplay = true;
+        const storedRepo = existingPayment.from_address ? normalizeGithubUrl(existingPayment.from_address) : "";
+        const currentRepo = normalizeGithubUrl(urlsToAudit[0] || "");
+        if (storedRepo && currentRepo && storedRepo === currentRepo) {
+          isReplay = true;
+        } else {
+          return Response.json(
+            {
+              ok: false,
+              error: "This transaction hash has already been used for a different repository.",
+            },
+            { status: 400 },
+          );
+        }
       }
 
       if (!isReplay) {
-        // Check transaction on chain
         const isXLayer = CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet";
         const verifyRpc = ARC_RPC_URL;
         const verifyUsdc = USDC_ADDRESS;
@@ -538,7 +558,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
           // Save payment details to insert later after evaluations succeed
           paymentData = {
             kind: "entry",
-            from_address: tx.from,
+            from_address: urlsToAudit[0] || null, // Store the audited repo URL
             to_address: recipient,
             amount_usdc: Number(amount) / 1000000,
             circle_tx_id: txHash,
@@ -797,7 +817,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
       await supabase.from("payments").insert({
         kind: "entry",
-        from_address: null,
+        from_address: urlsToAudit[0] || null, // Store the audited repo URL
         to_address: getOperatorAddress(),
         amount_usdc: Number(expectedMin) / 1000000,
         circle_tx_id: settleResult.transaction || `x402-${Date.now()}`,
