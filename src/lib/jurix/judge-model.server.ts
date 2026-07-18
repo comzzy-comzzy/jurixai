@@ -136,102 +136,118 @@ async function fetchWithTimeout(
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 4000);
   try {
-    const response = await fetchWithTimeout(
-      url,
-      {
-        headers: {
-          accept: "application/vnd.github+json",
-          "user-agent": "jurixai-judge-bot",
-          ...(process.env.GITHUB_TOKEN?.trim()
-            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-            : {}),
-        },
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
       },
-      4000,
-    );
+      signal: controller.signal,
+    });
 
-    if (!response.ok) return null;
-    return (await response.json()) as T;
+    if (!response.ok) {
+      clearTimeout(id);
+      return null;
+    }
+    const data = (await response.json()) as T;
+    clearTimeout(id);
+    return data;
   } catch (err) {
+    clearTimeout(id);
     console.error(`[fetchJson] Failed to fetch ${url}:`, err);
     return null;
   }
 }
 
 async function fetchText(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 4000);
   try {
-    const response = await fetchWithTimeout(
-      url,
-      {
-        headers: {
-          accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
-          "user-agent": "jurixai-judge-bot",
-          ...(process.env.GITHUB_TOKEN?.trim()
-            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-            : {}),
-        },
+    const response = await fetch(url, {
+      headers: {
+        accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
       },
-      4000,
-    );
+      signal: controller.signal,
+    });
 
-    if (!response.ok) return null;
-    return await response.text();
+    if (!response.ok) {
+      clearTimeout(id);
+      return null;
+    }
+    const data = await response.text();
+    clearTimeout(id);
+    return data;
   } catch (err) {
+    clearTimeout(id);
     console.error(`[fetchText] Failed to fetch ${url}:`, err);
     return null;
   }
 }
 
 async function fetchJsonDetailed<T>(url: string): Promise<FetchResult<T>> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 4000);
   try {
-    const response = await fetchWithTimeout(
-      url,
-      {
-        headers: {
-          accept: "application/vnd.github+json",
-          "user-agent": "jurixai-judge-bot",
-          ...(process.env.GITHUB_TOKEN?.trim()
-            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-            : {}),
-        },
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
       },
-      4000,
-    );
+      signal: controller.signal,
+    });
+
+    const data = response.ok ? ((await response.json()) as T) : null;
+    clearTimeout(id);
 
     return {
       ok: response.ok,
       status: response.status,
-      data: response.ok ? ((await response.json()) as T) : null,
+      data,
     };
   } catch (err) {
+    clearTimeout(id);
     console.error(`[fetchJsonDetailed] Failed to fetch ${url}:`, err);
     return { ok: false, status: 504, data: null };
   }
 }
 
 async function fetchTextDetailed(url: string): Promise<FetchResult<string>> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 4000);
   try {
-    const response = await fetchWithTimeout(
-      url,
-      {
-        headers: {
-          accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
-          "user-agent": "jurixai-judge-bot",
-          ...(process.env.GITHUB_TOKEN?.trim()
-            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-            : {}),
-        },
+    const response = await fetch(url, {
+      headers: {
+        accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
       },
-      4000,
-    );
+      signal: controller.signal,
+    });
+
+    const data = response.ok ? await response.text() : null;
+    clearTimeout(id);
 
     return {
       ok: response.ok,
       status: response.status,
-      data: response.ok ? await response.text() : null,
+      data,
     };
   } catch (err) {
+    clearTimeout(id);
     console.error(`[fetchTextDetailed] Failed to fetch ${url}:`, err);
     return { ok: false, status: 504, data: null };
   }
@@ -1123,21 +1139,24 @@ async function requestJudgeModel(
   bodyText: string;
   json: Record<string, unknown> | null;
 }> {
+  const controller = new AbortController();
+  // Safe timeout: 30 seconds for the entire LLM request (fetch + streaming/reading body text)
+  const id = setTimeout(() => controller.abort(), 30000);
+
   try {
-    const response = await fetchWithTimeout(
-      endpoint,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
       },
-      60000,
-    );
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
     const bodyText = await response.text();
+    clearTimeout(id);
+
     let json: Record<string, unknown> | null = null;
     try {
       json = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null;
@@ -1152,6 +1171,7 @@ async function requestJudgeModel(
       json,
     };
   } catch (err) {
+    clearTimeout(id);
     console.error(`[requestJudgeModel] Failed to fetch LLM endpoint ${endpoint}:`, err);
     return {
       ok: false,
@@ -1404,21 +1424,9 @@ export async function evaluateSubmissionWithModel(
   }
 
   if (!finalEvaluation) {
-    try {
-      finalEvaluation = buildFallbackEvaluation(
-        agent,
-        criterion,
-        hackathon,
-        submission,
-        repoContext,
-        lastError,
-        options,
-      );
-    } catch (fallbackErr) {
-      throw new Error(
-        `Model judging did not produce a valid evaluation. Fallback failed. ${lastError}. Fallback error: ${fallbackErr}`,
-      );
-    }
+    throw new Error(
+      `JuriXAI judging engine failed because the AI model is currently unreachable or timed out. Please try again later. Details: ${lastError}`
+    );
   }
 
   // Clean forbidden flags for direct repository audits

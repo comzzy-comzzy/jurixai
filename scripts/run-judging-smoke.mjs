@@ -2,9 +2,13 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { spawnSync } from "node:child_process";
 
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: { persistSession: false, autoRefreshToken: false },
+  },
+);
 
 function requireEnv(name) {
   const value = process.env[name]?.trim();
@@ -95,7 +99,9 @@ function normalizeStringArray(value) {
 }
 
 function extractEvaluation(text) {
-  const cleaned = String(text).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const cleaned = String(text)
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
   const score = Number(cleaned.match(/(?:^|\n)\s*SCORE\s*:\s*([^\n]+)/i)?.[1]);
   const confidence = Number(cleaned.match(/(?:^|\n)\s*CONFIDENCE\s*:\s*([^\n]+)/i)?.[1]);
   const rationale = String(cleaned.match(/(?:^|\n)\s*RATIONALE\s*:\s*([^\n]+)/i)?.[1] ?? "").trim();
@@ -103,10 +109,7 @@ function extractEvaluation(text) {
     cleaned.match(/(?:^|\n)\s*EVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "",
   );
   const flagsRaw = String(cleaned.match(/(?:^|\n)\s*FLAGS\s*:\s*([^\n]+)/i)?.[1] ?? "").trim();
-  const flags =
-    !flagsRaw || /^none$/i.test(flagsRaw)
-      ? []
-      : normalizeStringArray(flagsRaw);
+  const flags = !flagsRaw || /^none$/i.test(flagsRaw) ? [] : normalizeStringArray(flagsRaw);
 
   if (!Number.isFinite(score) || !Number.isFinite(confidence) || !rationale) {
     throw new Error(`Judge model returned invalid line format: ${cleaned.slice(0, 500)}`);
@@ -281,7 +284,11 @@ async function main() {
     { data: agents, error: agentsError },
     { data: submissions, error: submissionsError },
   ] = await Promise.all([
-    supabase.from("judging_criteria").select("*").eq("hackathon_id", hackathonId).order("sort_order"),
+    supabase
+      .from("judging_criteria")
+      .select("*")
+      .eq("hackathon_id", hackathonId)
+      .order("sort_order"),
     supabase.from("judge_agents").select("*").order("weight_percent", { ascending: false }),
     supabase.from("registrations").select("*").eq("hackathon_id", hackathonId),
   ]);
@@ -307,7 +314,9 @@ async function main() {
 
   const items = [];
   for (const criterion of criteria) {
-    const agent = agents.find((row) => row.id === criterion.agent_id) ?? agents.find((row) => row.slug === "vex-01");
+    const agent =
+      agents.find((row) => row.id === criterion.agent_id) ??
+      agents.find((row) => row.slug === "vex-01");
     if (!agent) continue;
     for (const submission of submissions) {
       items.push({
@@ -327,7 +336,9 @@ async function main() {
 
   let scored = 0;
   for (const criterion of criteria) {
-    const agent = agents.find((row) => row.id === criterion.agent_id) ?? agents.find((row) => row.slug === "vex-01");
+    const agent =
+      agents.find((row) => row.id === criterion.agent_id) ??
+      agents.find((row) => row.slug === "vex-01");
     if (!agent) continue;
     for (const submission of submissions) {
       await supabase
@@ -357,7 +368,11 @@ async function main() {
 
       const { error: completeItemError } = await supabase
         .from("judging_run_items")
-        .update({ status: "completed", completed_at: new Date().toISOString(), error_message: null })
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          error_message: null,
+        })
         .eq("run_id", runRow.id)
         .eq("registration_id", submission.id)
         .eq("criterion_id", criterion.id)
@@ -368,7 +383,10 @@ async function main() {
     }
   }
 
-  await supabase.from("registrations").update({ status: "complete" }).eq("hackathon_id", hackathonId);
+  await supabase
+    .from("registrations")
+    .update({ status: "complete" })
+    .eq("hackathon_id", hackathonId);
   await supabase.from("hackathons").update({ status: "closed" }).eq("id", hackathonId);
   await supabase
     .from("judging_runs")
@@ -403,6 +421,42 @@ async function main() {
       2,
     ),
   );
+
+  console.log("\n======================================================================");
+  console.log("                     JURIXAI SMOKE TEST AUDIT REPORT                   ");
+  console.log("======================================================================");
+  console.log(`Hackathon ID: ${hackathonId}`);
+  console.log(`Run ID: ${runRow.id}`);
+  console.log("======================================================================\n");
+
+  for (const submission of submissions) {
+    const subScores = scores.filter((s) => s.registration_id === submission.id);
+    const sum = subScores.reduce((acc, s) => acc + s.score, 0);
+    const avg = subScores.length ? (sum / subScores.length).toFixed(2) : "0.00";
+    
+    console.log(`📂 Repository/Project: ${submission.project_name} (Team: ${submission.team_name})`);
+    console.log(`GitHub URL: ${submission.github_url || "N/A"}`);
+    console.log(`Average Score: ${avg} / 10`);
+    console.log("----------------------------------------------------------------------");
+    
+    subScores.forEach((s) => {
+      const agent = agents.find((a) => a.id === s.agent_id) || { name: s.agent_id, role: "Judge Agent" };
+      console.log(`🤖 Agent: ${agent.name} (${agent.role})`);
+      console.log(`   Score: ${s.score} / 10`);
+      console.log(`   Confidence: ${(s.confidence * 100).toFixed(0)}%`);
+      console.log(`   Rationale: ${s.rationale}`);
+      if (s.evidence && s.evidence.length > 0) {
+        console.log(`   Evidence:`);
+        s.evidence.forEach((ev) => console.log(`     - ${ev}`));
+      }
+      if (s.flags && s.flags.length > 0) {
+        console.log(`   Flags:`);
+        s.flags.forEach((f) => console.log(`     - ${f}`));
+      }
+      console.log("");
+    });
+    console.log("======================================================================\n");
+  }
 }
 
 main().catch((error) => {

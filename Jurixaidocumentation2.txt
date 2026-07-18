@@ -57,7 +57,7 @@ ezinneagwu21@gmail.com
 -----------------------------------------------------------------------------------------
 6. WORKING MVP
 -----------------------------------------------------------------------------------------
-- Vercel Live Deployment: https://jurixai.vercel.app
+- Production Domain URL: https://www.jurixai.xyz
 - Localhost Dev Server: Runs on http://localhost:3000 (Vite + React framework)
 - Smart Contract Escrow Deployments:
   * Arc Testnet Address: 0x89db74b925f694ebec1118cff9b08a1afe528785
@@ -110,6 +110,7 @@ To execute the application locally:
   * Open http://localhost:3000 in your browser.
 
 8.2 API Endpoints
+- GET/POST `/api/judge`: The main repository quality audit endpoint. It evaluates GitHub repositories using JuriXAI's 4-agent judging panel. When called (e.g. via `curl`), it returns the full audit results as JSON, prints a beautiful, human-readable ASCII report directly to the server terminal, and includes this text report in the JSON response under the `report` key for terminal-based clients.
 - GET/POST `/api/judge-deadlines`: The main autonomous trigger endpoint. It fetches expired 
   hackathons, invokes AI judges, computes and registers scores, executes workload fees on-chain, 
   and locks standings for disbursement.

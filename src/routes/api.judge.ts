@@ -86,6 +86,64 @@ function normalizeGithubUrl(url: string): string {
     .replace(/\.git$/, ""); // remove .git suffix
 }
 
+function generateTextReport(
+  batchResults: Array<{
+    githubUrl: string;
+    evaluations: Array<{
+      agent: string;
+      role: string;
+      score: number;
+      confidence: number;
+      rationale: string;
+      evidence: string[];
+      flags: string[];
+    }>;
+    averageScore: number;
+  }>,
+  sandbox: boolean,
+  txHash: string
+): string {
+  let content = "";
+  content += `======================================================================\n`;
+  content += `                     JURIXAI AUDIT VERDICT REPORT                     \n`;
+  content += `======================================================================\n`;
+  content += `Execution Mode: ${sandbox ? "Sandbox (Free)" : "Live (Paid)"}\n`;
+  content += `Transaction Hash: ${txHash || "N/A"}\n`;
+  content += `Total Repositories: ${batchResults.length}\n`;
+  content += `======================================================================\n\n`;
+
+  batchResults.forEach((repo, idx) => {
+    content += `----------------------------------------------------------------------\n`;
+    content += `📂 [Repository ${idx + 1}/${batchResults.length}] ${repo.githubUrl}\n`;
+    content += `Average Score: ${repo.averageScore} / 10\n`;
+    content += `----------------------------------------------------------------------\n\n`;
+
+    repo.evaluations.forEach((ev) => {
+      content += `🤖 Agent: ${ev.agent} (${ev.role})\n`;
+      content += `   Score: ${ev.score} / 10\n`;
+      content += `   Confidence: ${(ev.confidence * 100).toFixed(0)}%\n`;
+      content += `   Rationale: ${ev.rationale}\n`;
+      
+      if (ev.evidence && ev.evidence.length > 0) {
+        content += `   Evidence:\n`;
+        ev.evidence.forEach((item) => {
+          content += `     - ${item}\n`;
+        });
+      }
+      
+      if (ev.flags && ev.flags.length > 0) {
+        content += `   Flags:\n`;
+        ev.flags.forEach((flag) => {
+          content += `     - ${flag}\n`;
+        });
+      }
+      content += `\n`;
+    });
+  });
+  content += `======================================================================\n`;
+  return content;
+}
+
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
     const url = new URL(request.url);
@@ -822,6 +880,14 @@ const handleJudge = async ({ request }: { request: Request }) => {
     }
 
     const isSingle = urlsToAudit.length === 1;
+    const reportText = generateTextReport(
+      batchResults,
+      sandbox,
+      txHash || (sandbox ? "sandbox_mode" : "x402_settled")
+    );
+
+    // Print the report directly to the server terminal console
+    console.log("\n" + reportText + "\n");
 
     return Response.json(
       {
@@ -832,6 +898,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
         averageScore: isSingle ? batchResults[0]?.averageScore : undefined,
         results: batchResults, // ALWAYS return the full results array
         repoCount,
+        report: reportText, // Send the report on their terminal too
       },
       { headers: settlementHeaders },
     );
