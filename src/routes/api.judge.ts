@@ -369,18 +369,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       .map((u) => (typeof u === "string" ? u.trim() : ""))
       .filter(Boolean);
 
-    if (urlsToAudit.length === 0) {
-      return Response.json(
-        {
-          ok: false,
-          error:
-            "No valid GitHub repository URL provided. Please supply a githubUrl, repoUrl, or task description containing a GitHub link in the body or query parameters.",
-        },
-        { status: 400 },
-      );
-    }
-
-    const repoCount = urlsToAudit.length;
+    const repoCount = urlsToAudit.length || 1;
 
     const feePerRepo = targetAgentSlugs.reduce(
       (sum, slug) => sum + (AGENTS_PRICING[slug] || 0n),
