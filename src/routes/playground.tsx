@@ -325,6 +325,10 @@ function Playground() {
       toast.error("Please enter or upload at least one valid GitHub repository URL.");
       return;
     }
+    if (!description.trim()) {
+      toast.error("Please enter a project description to provide context for the agents.");
+      return;
+    }
     if (mode === "live" && !txHash.trim()) {
       toast.error(`Please enter the ${networkName} ${tokenSymbol} payment transaction hash.`);
       return;
@@ -683,13 +687,14 @@ function Playground() {
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Project Description (Optional Context)
+                  Project Description (Required)
                 </label>
                 <textarea
                   placeholder="Briefly describe the purpose of the codebase and key features to help agents gain accurate context."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full bg-muted border border-border rounded-lg px-4.5 py-3 text-sm text-foreground h-24 focus:outline-none focus:border-accent resize-none"
+                  required
                 />
               </div>
 
