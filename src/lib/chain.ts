@@ -47,7 +47,7 @@ if (CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy") {
   explorerUrl = ENV.VITE_XLAYER_EXPLORER || "https://www.okx.com/web3/explorer/xlayer";
   chainId = 196;
   usdcAddress = (ENV.VITE_XLAYER_USDT_ADDRESS ||
-    "0x779ded0c9e1022225f8e0630b35a9b54be713736") as `0x${string}`; // USDT0 on X Layer Mainnet
+    "0x1e4a5963ab75d8c9021ce480b42188849d41d7d9") as `0x${string}`; // USDT on X Layer Mainnet
   nativeName = "OKB";
   nativeSymbol = "OKB";
   isTestnet = false;

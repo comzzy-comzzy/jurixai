@@ -21,7 +21,7 @@ import { ExactEvmScheme } from "@okxweb3/x402-evm/exact/server";
 import { getOperatorAddress } from "@/lib/chain.server";
 
 export const XLAYER_NETWORK = "eip155:196" as const;
-export const USDT0_ASSET = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+export const USDT0_ASSET = "0x1e4a5963ab75d8c9021ce480b42188849d41d7d9";
 export const USDT0_EXTRA = { name: "USDT", symbol: "USDT", decimals: 6, version: "1" };
 
 /** Per-agent pricing in USDT0 minimum units (6 decimals). */
