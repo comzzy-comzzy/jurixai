@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Download } from "lucide-react";
 import { JudgeActivityFeed } from "@/components/jurix/JudgeActivityFeed";
 import { ScoreBar } from "@/components/jurix/ScoreBar";
 import { WalletAddress } from "@/components/jurix/WalletAddress";
@@ -73,6 +73,41 @@ function ProjectDetail() {
       })),
     [agentNameById, project],
   );
+
+  const downloadReport = () => {
+    const reportData = {
+      project_name: project.project_name,
+      team_name: project.team_name,
+      hackathon_name: project.hackathon.name,
+      weighted_score: project.weighted_score,
+      average_raw_score: totalRawScore,
+      audit_date: new Date().toISOString(),
+      evaluations: scoredBreakdown.map(({ criterion, score, agent }) => ({
+        judge_name: agent ? agent.name : "Unassigned",
+        judge_code: agent ? agent.short_code : "N/A",
+        criterion_name: criterion.name,
+        criterion_weight_percent: criterion.weight_percent,
+        score: score ? score.score : 0,
+        weighted_points: score ? score.weighted_points : 0,
+        confidence: score ? score.confidence : 0,
+        rationale: score ? score.rationale : "No rationale recorded yet.",
+        evidence: score ? score.evidence : [],
+        flags: score ? score.flags : [],
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jurixai-audit-${project.project_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
@@ -156,6 +191,14 @@ function ProjectDetail() {
               judge notes that produced the final score.
             </p>
           </div>
+          {project.scores.length > 0 && (
+            <button
+              onClick={downloadReport}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow transition-colors hover:bg-accent/90"
+            >
+              <Download className="size-4" /> Download JSON Report
+            </button>
+          )}
         </div>
       </header>
 
@@ -185,9 +228,7 @@ function ProjectDetail() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No required deliverables were listed.
-              </p>
+              <p className="text-sm text-muted-foreground">No required deliverables were listed.</p>
             )}
           </div>
         </div>
@@ -205,7 +246,8 @@ function ProjectDetail() {
                 Project summary provided by the team
               </p>
               <div className="text-sm leading-relaxed text-foreground">
-                {renderFormattedText(project.description) ?? "No project description was submitted."}
+                {renderFormattedText(project.description) ??
+                  "No project description was submitted."}
               </div>
             </div>
             <div>
@@ -346,11 +388,18 @@ function ProjectDetail() {
                           rel="noreferrer"
                           className="text-accent flex items-center gap-1 font-bold hover:underline"
                         >
-                          ✓ Fee Paid: {score.fee_amount ? `${score.fee_amount.toFixed(6)} USDC` : "Calculated USDC"} <ArrowUpRight className="size-3" />
+                          ✓ Fee Paid:{" "}
+                          {score.fee_amount
+                            ? `${score.fee_amount.toFixed(6)} USDC`
+                            : "Calculated USDC"}{" "}
+                          <ArrowUpRight className="size-3" />
                         </a>
                       ) : score?.payment_status === "pending" ? (
                         <span className="text-warn flex items-center gap-1 font-bold animate-pulse">
-                          ⋯ Fee Pending: {score.fee_amount ? `${score.fee_amount.toFixed(6)} USDC` : "Dynamic USDC"}
+                          ⋯ Fee Pending:{" "}
+                          {score.fee_amount
+                            ? `${score.fee_amount.toFixed(6)} USDC`
+                            : "Dynamic USDC"}
                         </span>
                       ) : score?.payment_status === "failed" ? (
                         <span className="text-warn flex items-center gap-1 font-bold">
@@ -372,8 +421,8 @@ function ProjectDetail() {
                 <span className="tabular-nums">{weightedTotalFromBreakdown.toFixed(1)}%</span>
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                This total is the sum of every judge&apos;s weighted contribution, not an
-                arbitrary score.
+                This total is the sum of every judge&apos;s weighted contribution, not an arbitrary
+                score.
               </p>
             </div>
           </div>
@@ -440,7 +489,10 @@ function ProjectDetail() {
         </div>
         <div className="grid grid-cols-1 gap-4">
           {scoredBreakdown.map(({ criterion, score, agent }) => (
-            <div key={criterion.id} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div
+              key={criterion.id}
+              className="rounded-xl border border-border bg-card p-5 shadow-sm"
+            >
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
@@ -448,9 +500,8 @@ function ProjectDetail() {
                     {criterion.name}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Confidence:{" "}
-                    {score?.confidence != null ? score.confidence.toFixed(2) : "N/A"} · Weight:{" "}
-                    {criterion.weight_percent}%
+                    Confidence: {score?.confidence != null ? score.confidence.toFixed(2) : "N/A"} ·
+                    Weight: {criterion.weight_percent}%
                   </p>
                 </div>
                 <div className="text-sm font-semibold text-accent tabular-nums">
