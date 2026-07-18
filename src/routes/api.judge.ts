@@ -221,6 +221,16 @@ const handleJudge = async ({ request }: { request: Request }) => {
       description = "General codebase quality and architectural audit.";
     }
 
+    const hackathonBrief =
+      (body["hackathonBrief"] as string | undefined) ||
+      (body["brief"] as string | undefined) ||
+      (body["hackathonDescription"] as string | undefined) ||
+      url.searchParams.get("hackathonBrief") ||
+      url.searchParams.get("brief");
+
+    const hackathonName =
+      (body["hackathonName"] as string | undefined) || url.searchParams.get("hackathonName");
+
     // We do NOT fall back to JuriXAI automatically.
     // If no repository URL is provided, we will return 400 Bad Request below.
 
