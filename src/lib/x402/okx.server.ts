@@ -104,7 +104,14 @@ async function getBaseServer(): Promise<x402ResourceServer | null> {
     XLAYER_NETWORK,
     new ExactEvmScheme(),
   );
-  await server.initialize();
+
+  // Wrap server.initialize() with a 3-second timeout to prevent requests from hanging if the OKX facilitator is slow/unreachable
+  const initPromise = server.initialize();
+  const timeoutPromise = new Promise<void>((_, reject) =>
+    setTimeout(() => reject(new Error("Timeout initializing OKX x402 server (3s limit reached)")), 3000)
+  );
+
+  await Promise.race([initPromise, timeoutPromise]);
   return server;
 }
 
@@ -198,9 +205,108 @@ export async function processOkxPayment(
   return { type: "unavailable" };
 }
 
+/**
+ * Run the standard x402 flow for a website code generation request.
+ */
+export async function processOkxGeneratePayment(
+  request: Request,
+  parsedBody: unknown,
+): Promise<OkxPaymentResult> {
+  const baseServer = await getCachedBaseServer();
+  if (!baseServer) return { type: "unavailable" };
+
+  const amount = "1000000"; // 1.00 USDT
+  const accepts = {
+    scheme: "exact",
+    network: XLAYER_NETWORK,
+    payTo: getOperatorAddress(),
+    price: { amount, asset: USDT0_ASSET, extra: { ...USDT0_EXTRA } },
+    maxTimeoutSeconds: 300,
+  };
+
+  const routeConfig = {
+    accepts,
+    description: "DesignOnchain AI: Website Code Compilation Service. Generates premium responsive HTML/CSS designs from prompts.",
+    mimeType: "application/json",
+    unpaidResponseBody: () => ({
+      contentType: "application/json",
+      body: {
+        ok: false,
+        error:
+          "Payment required. Retry with a standard x402 PAYMENT-SIGNATURE header (OKX Payment SDK), or pass a txHash of a direct USDT0 transfer, or set sandbox=true for a free preview.",
+        x402Version: 2,
+      },
+    }),
+  };
+
+  const httpServer = new x402HTTPResourceServer(baseServer, {
+    "GET /api/generate": routeConfig,
+    "POST /api/generate": routeConfig,
+  });
+
+  const adapter = createRequestAdapter(request, parsedBody);
+  const context: HTTPRequestContext = {
+    adapter,
+    path: adapter.getPath(),
+    method: adapter.getMethod(),
+    paymentHeader: adapter.getHeader("payment-signature"),
+  };
+
+  const result = await httpServer.processHTTPRequest(context);
+
+  if (result.type === "payment-error") {
+    return { type: "payment-error", response: result.response };
+  }
+
+  if (result.type === "payment-verified") {
+    const { paymentPayload, paymentRequirements, declaredExtensions } = result;
+    return {
+      type: "payment-verified",
+      settle: async () => {
+        const settleResult = await httpServer.processSettlement(
+          paymentPayload,
+          paymentRequirements,
+          declaredExtensions,
+          { request: context },
+        );
+        if (settleResult.success) {
+          return {
+            success: true,
+            headers: settleResult.headers,
+            transaction: (settleResult as { transaction?: string }).transaction,
+          };
+        }
+        return { success: false, response: settleResult.response };
+      },
+    };
+  }
+
+  return { type: "unavailable" };
+}
+
 /** Convert SDK HTTPResponseInstructions into a Fetch API Response. */
 export function instructionsToResponse(instructions: HTTPResponseInstructions): Response {
   const headers = new Headers(instructions.headers);
+
+  // Rewrite payment-required challenge URL if present to match the official OKX.AI listing URL
+  const paymentRequiredHeader = headers.get("payment-required");
+  if (paymentRequiredHeader) {
+    try {
+      const decoded = JSON.parse(Buffer.from(paymentRequiredHeader, "base64").toString("utf8"));
+      if (decoded.resource && decoded.resource.url) {
+        if (decoded.resource.url.includes("api/generate")) {
+          decoded.resource.url = "https://www.jurixai.xyz/api/generate";
+        } else {
+          decoded.resource.url = "https://www.jurixai.xyz/api/judge";
+        }
+        const reEncoded = Buffer.from(JSON.stringify(decoded)).toString("base64");
+        headers.set("payment-required", reEncoded);
+      }
+    } catch (e) {
+      console.error("[x402] Failed to rewrite payment-required header URL:", e);
+    }
+  }
+
   if (instructions.isHtml) {
     if (!headers.has("Content-Type")) headers.set("Content-Type", "text/html; charset=utf-8");
     return new Response(String(instructions.body ?? ""), {

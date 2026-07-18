@@ -1057,7 +1057,7 @@ function Playground() {
 
                 <div className="w-full md:w-auto font-mono text-[9px] bg-black p-2.5 rounded border border-border/30 text-green-400 overflow-x-auto select-all">
                   {
-                    'curl -X POST https://jurixai.xyz/api/judge -d \'{"githubUrls":["..."], "txHash":"..."}\''
+                    'curl -X POST https://www.jurixai.xyz/api/judge -d \'{"githubUrls":["..."], "txHash":"..."}\''
                   }
                 </div>
               </div>

@@ -99,7 +99,7 @@ function stripHtml(value: string): string {
   );
 }
 
-function parseGitHubRepo(url: string | null): { owner: string; repo: string } | null {
+export function parseGitHubRepo(url: string | null): { owner: string; repo: string } | null {
   if (!url) return null;
   try {
     const parsed = new URL(url);
@@ -115,70 +115,106 @@ function parseGitHubRepo(url: string | null): { owner: string; repo: string } | 
   }
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "jurixai-judge-bot",
-      ...(process.env.GITHUB_TOKEN?.trim()
-        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-        : {}),
-    },
-  });
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
 
-  if (!response.ok) return null;
-  return (await response.json()) as T;
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
+      },
+    }, 4000);
+
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch (err) {
+    console.error(`[fetchJson] Failed to fetch ${url}:`, err);
+    return null;
+  }
 }
 
 async function fetchText(url: string): Promise<string | null> {
-  const response = await fetch(url, {
-    headers: {
-      accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
-      "user-agent": "jurixai-judge-bot",
-      ...(process.env.GITHUB_TOKEN?.trim()
-        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-        : {}),
-    },
-  });
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
+      },
+    }, 4000);
 
-  if (!response.ok) return null;
-  return await response.text();
+    if (!response.ok) return null;
+    return await response.text();
+  } catch (err) {
+    console.error(`[fetchText] Failed to fetch ${url}:`, err);
+    return null;
+  }
 }
 
 async function fetchJsonDetailed<T>(url: string): Promise<FetchResult<T>> {
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "jurixai-judge-bot",
-      ...(process.env.GITHUB_TOKEN?.trim()
-        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-        : {}),
-    },
-  });
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
+      },
+    }, 4000);
 
-  return {
-    ok: response.ok,
-    status: response.status,
-    data: response.ok ? ((await response.json()) as T) : null,
-  };
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: response.ok ? ((await response.json()) as T) : null,
+    };
+  } catch (err) {
+    console.error(`[fetchJsonDetailed] Failed to fetch ${url}:`, err);
+    return { ok: false, status: 504, data: null };
+  }
 }
 
 async function fetchTextDetailed(url: string): Promise<FetchResult<string>> {
-  const response = await fetch(url, {
-    headers: {
-      accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
-      "user-agent": "jurixai-judge-bot",
-      ...(process.env.GITHUB_TOKEN?.trim()
-        ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-        : {}),
-    },
-  });
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+        "user-agent": "jurixai-judge-bot",
+        ...(process.env.GITHUB_TOKEN?.trim()
+          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+          : {}),
+      },
+    }, 4000);
 
-  return {
-    ok: response.ok,
-    status: response.status,
-    data: response.ok ? await response.text() : null,
-  };
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: response.ok ? await response.text() : null,
+    };
+  } catch (err) {
+    console.error(`[fetchTextDetailed] Failed to fetch ${url}:`, err);
+    return { ok: false, status: 504, data: null };
+  }
 }
 
 function parseRepoPageFallback(html: string, owner: string, repo: string): RepoPageFallback | null {
@@ -853,29 +889,39 @@ async function requestJudgeModel(
   bodyText: string;
   json: Record<string, unknown> | null;
 }> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  const bodyText = await response.text();
-  let json: Record<string, unknown> | null = null;
   try {
-    json = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null;
-  } catch {
-    json = null;
-  }
+    const response = await fetchWithTimeout(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }, 15000);
 
-  return {
-    ok: response.ok,
-    status: response.status,
-    bodyText,
-    json,
-  };
+    const bodyText = await response.text();
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null;
+    } catch {
+      json = null;
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      bodyText,
+      json,
+    };
+  } catch (err) {
+    console.error(`[requestJudgeModel] Failed to fetch LLM endpoint ${endpoint}:`, err);
+    return {
+      ok: false,
+      status: 504,
+      bodyText: err instanceof Error ? err.message : "Timeout or connection failed",
+      json: null,
+    };
+  }
 }
 
 function validateEvaluation(raw: string): AgentEvaluation {

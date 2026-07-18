@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { evaluateSubmissionWithModel } from "@/lib/jurix/judge-model.server";
+import { evaluateSubmissionWithModel, parseGitHubRepo } from "@/lib/jurix/judge-model.server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createPublicClient, http, decodeFunctionData } from "viem";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
@@ -64,14 +64,67 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
     }
 
-    const githubUrl = body.githubUrl || url.searchParams.get("githubUrl");
-    let githubUrls = body.githubUrls;
-    if (!githubUrls && url.searchParams.has("githubUrls")) {
-      const urlsParam = url.searchParams.get("githubUrls");
+    // Check for user prompt or message in common body fields or query params
+    const promptKeys = ["prompt", "message", "content", "text", "query", "q", "msg"];
+    let userPrompt = "";
+    for (const key of promptKeys) {
+      if (body[key] && typeof body[key] === "string") {
+        userPrompt = body[key];
+        break;
+      }
+      const paramVal = url.searchParams.get(key);
+      if (paramVal) {
+        userPrompt = paramVal;
+        break;
+      }
+    }
+
+    let githubUrl =
+      body.githubUrl ||
+      body.repoUrl ||
+      body.url ||
+      body.repository ||
+      url.searchParams.get("githubUrl") ||
+      url.searchParams.get("repoUrl") ||
+      url.searchParams.get("url");
+
+    let githubUrls = body.githubUrls || body.repoUrls || body.urls;
+    if (!githubUrls && (url.searchParams.has("githubUrls") || url.searchParams.has("repoUrls") || url.searchParams.has("urls"))) {
+      const urlsParam =
+        url.searchParams.get("githubUrls") ||
+        url.searchParams.get("repoUrls") ||
+        url.searchParams.get("urls");
       githubUrls = urlsParam ? urlsParam.split(",") : undefined;
     }
 
-    const description = body.description || url.searchParams.get("description");
+    let description = body.description || url.searchParams.get("description");
+
+    // If a user prompt was found, parse it for GitHub URLs and set description
+    let wasFallbackRepoUsed = false;
+    if (userPrompt) {
+      const githubUrlRegex = /https?:\/\/github\.com\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+/gi;
+      const matches = userPrompt.match(githubUrlRegex);
+      if (matches && matches.length > 0) {
+        if (!githubUrl) {
+          githubUrl = matches[0];
+        }
+        if (!githubUrls) {
+          githubUrls = matches;
+        }
+      }
+      if (!description) {
+        description = userPrompt;
+      }
+    }
+
+    // Fallback to JuriXAI repository if absolutely no GitHub URL was supplied
+    if (!githubUrl && (!githubUrls || githubUrls.length === 0)) {
+      githubUrl = "https://github.com/ezinneagwu/jurixai";
+      wasFallbackRepoUsed = true;
+      description = description
+        ? `${description} (No GitHub URL provided, fell back to auditing: https://github.com/ezinneagwu/jurixai)`
+        : "Automated audit of the JuriXAI repository (fallback mode).";
+    }
 
     // Parse sandbox mode: defaults to false unless explicitly set to true
     let sandbox = false;
@@ -181,8 +234,60 @@ const handleJudge = async ({ request }: { request: Request }) => {
       );
     }
 
-    const urlsToAudit = githubUrl ? [githubUrl] : (Array.isArray(githubUrls) ? githubUrls : []);
-    const repoCount = urlsToAudit.length || 1; // Default to 1 for pricing/challenge if empty
+    const urlsToAudit = (githubUrl ? [githubUrl] : (Array.isArray(githubUrls) ? githubUrls : []))
+      .map((u) => (typeof u === "string" ? u.trim() : ""))
+      .filter(Boolean);
+
+    if (urlsToAudit.length === 0) {
+      return Response.json(
+        { ok: false, error: "No valid repository URL provided." },
+        { status: 400 }
+      );
+    }
+
+    // Validate repository URLs and check accessibility BEFORE starting evaluations or payment flow
+    for (const urlToAudit of urlsToAudit) {
+      const repoRef = parseGitHubRepo(urlToAudit);
+      if (!repoRef) {
+        return Response.json(
+          { ok: false, error: `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.` },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const checkUrl = `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`;
+        const response = await fetch(checkUrl, {
+          headers: {
+            accept: "application/vnd.github+json",
+            "user-agent": "jurixai-judge-bot",
+            ...(process.env.GITHUB_TOKEN?.trim()
+              ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+              : {}),
+          },
+        });
+        if (!response.ok) {
+          if (response.status === 404) {
+            return Response.json(
+              { ok: false, error: `GitHub repository is private or does not exist: ${urlToAudit}` },
+              { status: 404 }
+            );
+          } else {
+            return Response.json(
+              { ok: false, error: `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}` },
+              { status: response.status }
+            );
+          }
+        }
+      } catch (err) {
+        return Response.json(
+          { ok: false, error: `Failed to verify repository accessibility: ${err instanceof Error ? err.message : String(err)}` },
+          { status: 502 }
+        );
+      }
+    }
+
+    const repoCount = urlsToAudit.length;
 
     const feePerRepo = targetAgentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0n), 0n);
     const expectedMin = feePerRepo * BigInt(repoCount);
@@ -209,9 +314,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     // Also serves the manual 402 challenge when the OKX facilitator is unavailable.
     if (!sandbox && !okxVerified) {
       if (!txHash) {
-        const requestUrl = new URL(request.url);
-        const origin = requestUrl.origin;
-        const endpointUrl = `${origin}/api/judge`;
+        const endpointUrl = "https://www.jurixai.xyz/api/judge";
         const operatorAddress = getOperatorAddress();
         const amount = expectedMin.toString();
 
@@ -493,15 +596,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
             flags: evaluation.flags,
           };
         } catch (err) {
-          return {
-            agent: agent.name,
-            role: agent.role,
-            score: 1,
-            confidence: 0,
-            rationale: `Error running evaluation: ${err instanceof Error ? err.message : "Inference failed."}`,
-            evidence: [],
-            flags: ["ERROR"],
-          };
+          console.error(`[api/judge] Agent ${agent.name} evaluation failed:`, err);
+          throw err;
         }
       });
 
@@ -554,16 +650,16 @@ const handleJudge = async ({ request }: { request: Request }) => {
       await supabase.from("payments").insert(paymentData);
     }
 
-    const isSingle = Boolean(githubUrl);
+    const isSingle = urlsToAudit.length === 1;
 
     return Response.json(
       {
         ok: true,
-        githubUrl: isSingle ? githubUrl : undefined,
+        githubUrl: isSingle ? urlsToAudit[0] : undefined,
         txHash: txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
-        evaluations: isSingle ? batchResults[0].evaluations : undefined,
-        averageScore: isSingle ? batchResults[0].averageScore : undefined,
-        results: !isSingle ? batchResults : undefined,
+        evaluations: isSingle ? batchResults[0]?.evaluations : undefined,
+        averageScore: isSingle ? batchResults[0]?.averageScore : undefined,
+        results: batchResults, // ALWAYS return the full results array
         repoCount,
       },
       { headers: settlementHeaders },
