@@ -445,6 +445,18 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
     }
 
+    // Validate project description AFTER payment is confirmed, but BEFORE starting evaluations.
+    if (!description || typeof description !== "string" || !description.trim()) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Project description is required. Please describe the purpose of the codebase and key features to help agents gain accurate context.",
+        },
+        { status: 400 },
+      );
+    }
+
     // Validate repository URLs and check accessibility AFTER payment is confirmed,
     // but BEFORE starting the evaluations.
     for (const urlToAudit of urlsToAudit) {
