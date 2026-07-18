@@ -52,13 +52,39 @@ const AGENT_CRITERIA_MAP = {
   },
 };
 
+function extractAllGitHubUrls(obj: unknown): string[] {
+  const urls: string[] = [];
+  const githubUrlRegex = /https?:\/\/github\.com\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+/gi;
+
+  function traverse(item: unknown) {
+    if (!item) return;
+    if (typeof item === "string") {
+      const matches = item.match(githubUrlRegex);
+      if (matches) {
+        urls.push(...matches);
+      }
+    } else if (Array.isArray(item)) {
+      item.forEach(traverse);
+    } else if (typeof item === "object" && item !== null) {
+      for (const key in item) {
+        if (Object.prototype.hasOwnProperty.call(item, key)) {
+          traverse((item as Record<string, unknown>)[key]);
+        }
+      }
+    }
+  }
+
+  traverse(obj);
+  return [...new Set(urls)];
+}
+
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
     const url = new URL(request.url);
-    let body: any = {};
+    let body: Record<string, unknown> = {};
     if (request.method === "POST" || request.method === "PUT") {
       try {
-        body = await request.json();
+        body = (await request.json()) as Record<string, unknown>;
       } catch (e) {
         body = {};
       }
@@ -79,39 +105,101 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
     }
 
-    let githubUrl =
-      body.githubUrl ||
-      body.repoUrl ||
-      body.url ||
-      body.repository ||
-      url.searchParams.get("githubUrl") ||
-      url.searchParams.get("repoUrl") ||
-      url.searchParams.get("url");
+    // Comprehensive parsing of repo URLs and description from body and search params
+    const repoKeys = [
+      "githubUrl",
+      "github_url",
+      "repoUrl",
+      "repo_url",
+      "url",
+      "repository",
+      "repositoryUrl",
+      "repository_url",
+      "repo",
+      "git",
+      "gitUrl",
+      "git_url",
+      "link",
+    ];
 
-    let githubUrls = body.githubUrls || body.repoUrls || body.urls;
-    if (!githubUrls && (url.searchParams.has("githubUrls") || url.searchParams.has("repoUrls") || url.searchParams.has("urls"))) {
-      const urlsParam =
-        url.searchParams.get("githubUrls") ||
-        url.searchParams.get("repoUrls") ||
-        url.searchParams.get("urls");
-      githubUrls = urlsParam ? urlsParam.split(",") : undefined;
+    let githubUrl = "";
+    for (const key of repoKeys) {
+      if (body[key] && typeof body[key] === "string" && (body[key] as string).trim()) {
+        githubUrl = (body[key] as string).trim();
+        break;
+      }
+      const paramVal = url.searchParams.get(key);
+      if (paramVal && paramVal.trim()) {
+        githubUrl = paramVal.trim();
+        break;
+      }
     }
 
-    let description = body.description || url.searchParams.get("description");
+    const repoUrlsKeys = ["githubUrls", "github_urls", "repoUrls", "repo_urls", "urls"];
+    let githubUrls: string[] | undefined = undefined;
+    for (const key of repoUrlsKeys) {
+      if (body[key]) {
+        githubUrls = body[key] as string[];
+        break;
+      }
+      const paramVal = url.searchParams.get(key);
+      if (paramVal) {
+        githubUrls = paramVal
+          .split(",")
+          .map((u) => u.trim())
+          .filter(Boolean);
+        break;
+      }
+    }
 
-    const hackathonBrief =
-      body.hackathonBrief ||
-      body.brief ||
-      body.hackathonDescription ||
-      url.searchParams.get("hackathonBrief") ||
-      url.searchParams.get("brief");
+    const descKeys = [
+      "taskDescription",
+      "task_description",
+      "task",
+      "description",
+      "prompt",
+      "message",
+      "content",
+      "text",
+      "query",
+      "q",
+      "msg",
+      "brief",
+      "hackathonBrief",
+      "hackathon_brief",
+    ];
+    let description = "";
+    for (const key of descKeys) {
+      if (body[key] && typeof body[key] === "string" && (body[key] as string).trim()) {
+        description = (body[key] as string).trim();
+        break;
+      }
+      const paramVal = url.searchParams.get(key);
+      if (paramVal && paramVal.trim()) {
+        description = paramVal.trim();
+        break;
+      }
+    }
 
-    const hackathonName =
-      body.hackathonName ||
-      url.searchParams.get("hackathonName");
+    // Fail-safe scanner to pull any GitHub URLs from request body and search parameters
+    const scannedUrls = [
+      ...extractAllGitHubUrls(body),
+      ...extractAllGitHubUrls(Object.fromEntries(url.searchParams.entries())),
+    ];
+
+    if (!githubUrl && scannedUrls.length > 0) {
+      githubUrl = scannedUrls[0];
+    }
+    if (!githubUrls && scannedUrls.length > 0) {
+      githubUrls = scannedUrls;
+    }
+
+    // If userPrompt is empty but description is found, use it
+    if (!userPrompt && description) {
+      userPrompt = description;
+    }
 
     // If a user prompt was found, parse it for GitHub URLs and set description
-    let wasFallbackRepoUsed = false;
     if (userPrompt) {
       const githubUrlRegex = /https?:\/\/github\.com\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+/gi;
       const matches = userPrompt.match(githubUrlRegex);
@@ -128,30 +216,29 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
     }
 
-    // Fallback to JuriXAI repository if absolutely no GitHub URL was supplied
-    if (!githubUrl && (!githubUrls || githubUrls.length === 0)) {
-      githubUrl = "https://github.com/comzzy-comzzy/jurixai";
-      wasFallbackRepoUsed = true;
-      description = description
-        ? `${description} (No GitHub URL provided, fell back to auditing: https://github.com/comzzy-comzzy/jurixai)`
-        : "Automated audit of the JuriXAI repository (fallback mode).";
+    // Default the description if still not provided
+    if (!description || typeof description !== "string" || !description.trim()) {
+      description = "General codebase quality and architectural audit.";
     }
+
+    // We do NOT fall back to JuriXAI automatically.
+    // If no repository URL is provided, we will return 400 Bad Request below.
 
     // Parse sandbox mode: defaults to false unless explicitly set to true
     let sandbox = false;
-    if (body.sandbox !== undefined) {
-      sandbox = Boolean(body.sandbox);
+    if (body["sandbox"] !== undefined) {
+      sandbox = Boolean(body["sandbox"]);
     } else if (url.searchParams.has("sandbox")) {
       sandbox = url.searchParams.get("sandbox") === "true";
     }
 
-    let requestedAgentSlugs = body.agents;
+    let requestedAgentSlugs = body["agents"] as string[] | undefined;
     if (!requestedAgentSlugs && url.searchParams.has("agents")) {
       const agentsParam = url.searchParams.get("agents");
       requestedAgentSlugs = agentsParam ? agentsParam.split(",") : undefined;
     }
 
-    let txHash = body.txHash || url.searchParams.get("txHash");
+    let txHash = (body["txHash"] as string | undefined) || url.searchParams.get("txHash");
 
     // Extract txHash from standard x402 headers if not in body/query params
     if (!txHash) {
@@ -161,7 +248,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
         "X-PAYMENT",
         "x-payment",
         "Authorization",
-        "authorization"
+        "authorization",
       ];
       for (const headerName of headersToCheck) {
         const val = request.headers.get(headerName);
@@ -208,26 +295,35 @@ const handleJudge = async ({ request }: { request: Request }) => {
         // Try parsing raw JSON
         if (cleanVal.includes("{")) {
           try {
-            const parsed = JSON.parse(cleanVal);
-            if (parsed.txHash) {
-              txHash = parsed.txHash;
+            const parsed = JSON.parse(cleanVal) as Record<string, unknown>;
+            if (parsed["txHash"]) {
+              txHash = parsed["txHash"] as string;
               break;
             }
-            if (parsed.transaction) {
-              txHash = parsed.transaction;
+            if (parsed["transaction"]) {
+              txHash = parsed["transaction"] as string;
               break;
             }
-          } catch (e) {}
+          } catch (e) {
+            // Ignore parse errors on nested objects
+          }
         }
       }
     }
 
-    let paymentData: any = null;
+    let paymentData: {
+      kind: string;
+      from_address: string | null;
+      to_address: string;
+      amount_usdc: number;
+      circle_tx_id: string;
+      status: string;
+    } | null = null;
     let isReplay = false;
 
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
-      "vex-01": 40000n,  // 0.04 USDT (Engineering)
+      "vex-01": 40000n, // 0.04 USDT (Engineering)
       "kael-02": 30000n, // 0.03 USDT (Product/UX)
       "oryn-03": 20000n, // 0.02 USDT (Innovation)
       "zera-04": 20000n, // 0.02 USDT (Completeness/Docs)
@@ -235,24 +331,31 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     // Default to all active agents if not provided or empty
     const defaultSlugs = ["vex-01", "kael-02", "oryn-03", "zera-04"];
-    const targetAgentSlugs = Array.isArray(requestedAgentSlugs) && requestedAgentSlugs.length > 0
-      ? requestedAgentSlugs.filter(slug => defaultSlugs.includes(slug))
-      : defaultSlugs;
+    const targetAgentSlugs =
+      Array.isArray(requestedAgentSlugs) && requestedAgentSlugs.length > 0
+        ? requestedAgentSlugs.filter((slug) => defaultSlugs.includes(slug))
+        : defaultSlugs;
 
     if (targetAgentSlugs.length === 0) {
       return Response.json(
-        { ok: false, error: "Invalid agents requested. Valid slugs are: vex-01, kael-02, oryn-03, zera-04" },
+        {
+          ok: false,
+          error: "Invalid agents requested. Valid slugs are: vex-01, kael-02, oryn-03, zera-04",
+        },
         { status: 400 },
       );
     }
 
-    const urlsToAudit = (githubUrl ? [githubUrl] : (Array.isArray(githubUrls) ? githubUrls : []))
+    const urlsToAudit = (githubUrl ? [githubUrl] : Array.isArray(githubUrls) ? githubUrls : [])
       .map((u) => (typeof u === "string" ? u.trim() : ""))
       .filter(Boolean);
 
     const repoCount = urlsToAudit.length || 1;
 
-    const feePerRepo = targetAgentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0n), 0n);
+    const feePerRepo = targetAgentSlugs.reduce(
+      (sum, slug) => sum + (AGENTS_PRICING[slug] || 0n),
+      0n,
+    );
     const expectedMin = feePerRepo * BigInt(repoCount);
     const supabase = getSupabaseServerClient();
 
@@ -286,7 +389,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
           resource: {
             url: endpointUrl,
             description: `JuriXAI Auditor: Modular multi-agent repository quality audit service (Agents: ${targetAgentSlugs.join(", ")}).`,
-            mimeType: "application/json"
+            mimeType: "application/json",
           },
           accepts: [
             {
@@ -296,9 +399,9 @@ const handleJudge = async ({ request }: { request: Request }) => {
               amount: amount,
               payTo: operatorAddress,
               maxTimeoutSeconds: 300,
-              extra: { name: "USD₮0", version: "1" }
-            }
-          ]
+              extra: { name: "USD₮0", version: "1" },
+            },
+          ],
         };
 
         const challengeBase64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
@@ -306,20 +409,17 @@ const handleJudge = async ({ request }: { request: Request }) => {
         const responseBody = {
           ok: false,
           error: "Payment transaction hash is required for mainnet mode.",
-          ...challenge
+          ...challenge,
         };
 
-        return new Response(
-          JSON.stringify(responseBody),
-          {
-            status: 402,
-            headers: {
-              "Content-Type": "application/json",
-              "PAYMENT-REQUIRED": challengeBase64,
-              "Cache-Control": "no-store, no-cache, must-revalidate",
-            },
-          }
-        );
+        return new Response(JSON.stringify(responseBody), {
+          status: 402,
+          headers: {
+            "Content-Type": "application/json",
+            "PAYMENT-REQUIRED": challengeBase64,
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        });
       }
 
       // Check if txHash has already been registered (indicates a replay attempt to retrieve results)
@@ -335,104 +435,104 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
       if (!isReplay) {
         // Check transaction on chain
-      const isXLayer = CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet";
-      let verifyRpc = ARC_RPC_URL;
-      let verifyUsdc = USDC_ADDRESS;
-      let verifyChainName = isXLayer
-        ? "X Layer"
-        : CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
-          ? "Polygon"
-          : "Arc";
-      let verifyTokenSymbol = isXLayer ? "USDT" : "USDC";
+        const isXLayer = CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet";
+        const verifyRpc = ARC_RPC_URL;
+        const verifyUsdc = USDC_ADDRESS;
+        const verifyChainName = isXLayer
+          ? "X Layer"
+          : CHAIN_NAME === "MATIC-AMOY" || CHAIN_NAME === "polygonAmoy"
+            ? "Polygon"
+            : "Arc";
+        const verifyTokenSymbol = isXLayer ? "USDT" : "USDC";
 
-      const client = createPublicClient({ transport: http(verifyRpc) });
-      let tx;
-      let receipt;
-      try {
-        tx = await client.getTransaction({ hash: txHash as `0x${string}` });
-        receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
-      } catch (err) {
-        return Response.json(
-          {
-            ok: false,
-            error: `Failed to fetch transaction details on ${verifyChainName}. Verify the hash is correct and confirmed.`,
-          },
-          { status: 400 },
-        );
-      }
-
-      if (receipt.status !== "success") {
-        return Response.json(
-          { ok: false, error: "Payment transaction has reverted or failed on-chain." },
-          { status: 400 },
-        );
-      }
-
-      // Verify transaction is sending tokens to operator
-      const allowedContracts = [verifyUsdc.toLowerCase()];
-      if (isXLayer) {
-        // Also support standard/previous USDT contract address on X Layer
-        const prevXLayerUsdt = "0x1e4a5963ab75d8c9021ce480b42188849d41d7d9";
-        if (!allowedContracts.includes(prevXLayerUsdt)) {
-          allowedContracts.push(prevXLayerUsdt);
-        }
-      }
-
-      if (!tx.to || !allowedContracts.includes(tx.to.toLowerCase())) {
-        return Response.json(
-          {
-            ok: false,
-            error: `Transaction was not directed to the ${verifyChainName} ${verifyTokenSymbol} contract.`,
-          },
-          { status: 400 },
-        );
-      }
-
-      try {
-        const decoded = decodeFunctionData({
-          abi: transferAbi,
-          data: tx.input,
-        });
-        const recipient = decoded.args[0];
-        const amount = decoded.args[1];
-
-        const operatorAddress = getOperatorAddress();
-        if (recipient.toLowerCase() !== operatorAddress.toLowerCase()) {
-          return Response.json(
-            { ok: false, error: "Recipient is not the JuriXAI operator address." },
-            { status: 400 },
-          );
-        }
-
-        if (amount < expectedMin) {
+        const client = createPublicClient({ transport: http(verifyRpc) });
+        let tx;
+        let receipt;
+        try {
+          tx = await client.getTransaction({ hash: txHash as `0x${string}` });
+          receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
+        } catch (err) {
           return Response.json(
             {
               ok: false,
-              error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} ${verifyTokenSymbol} for ${repoCount} repositories.`,
+              error: `Failed to fetch transaction details on ${verifyChainName}. Verify the hash is correct and confirmed.`,
             },
             { status: 400 },
           );
         }
 
-        // Save payment details to insert later after evaluations succeed
-        paymentData = {
-          kind: "entry",
-          from_address: tx.from,
-          to_address: recipient,
-          amount_usdc: Number(amount) / 1000000,
-          circle_tx_id: txHash,
-          status: "confirmed",
-        };
-      } catch (err) {
-        return Response.json(
-          {
-            ok: false,
-            error:
-              "Invalid transaction structure or decoding failed. Make sure it is a standard USDT transfer.",
-          },
-          { status: 400 },
-        );
-      }
+        if (receipt.status !== "success") {
+          return Response.json(
+            { ok: false, error: "Payment transaction has reverted or failed on-chain." },
+            { status: 400 },
+          );
+        }
+
+        // Verify transaction is sending tokens to operator
+        const allowedContracts = [verifyUsdc.toLowerCase()];
+        if (isXLayer) {
+          // Also support standard/previous USDT contract address on X Layer
+          const prevXLayerUsdt = "0x1e4a5963ab75d8c9021ce480b42188849d41d7d9";
+          if (!allowedContracts.includes(prevXLayerUsdt)) {
+            allowedContracts.push(prevXLayerUsdt);
+          }
+        }
+
+        if (!tx.to || !allowedContracts.includes(tx.to.toLowerCase())) {
+          return Response.json(
+            {
+              ok: false,
+              error: `Transaction was not directed to the ${verifyChainName} ${verifyTokenSymbol} contract.`,
+            },
+            { status: 400 },
+          );
+        }
+
+        try {
+          const decoded = decodeFunctionData({
+            abi: transferAbi,
+            data: tx.input,
+          });
+          const recipient = decoded.args[0];
+          const amount = decoded.args[1];
+
+          const operatorAddress = getOperatorAddress();
+          if (recipient.toLowerCase() !== operatorAddress.toLowerCase()) {
+            return Response.json(
+              { ok: false, error: "Recipient is not the JuriXAI operator address." },
+              { status: 400 },
+            );
+          }
+
+          if (amount < expectedMin) {
+            return Response.json(
+              {
+                ok: false,
+                error: `Transaction amount is insufficient. Minimum required is ${Number(expectedMin) / 1000000} ${verifyTokenSymbol} for ${repoCount} repositories.`,
+              },
+              { status: 400 },
+            );
+          }
+
+          // Save payment details to insert later after evaluations succeed
+          paymentData = {
+            kind: "entry",
+            from_address: tx.from,
+            to_address: recipient,
+            amount_usdc: Number(amount) / 1000000,
+            circle_tx_id: txHash,
+            status: "confirmed",
+          };
+        } catch (err) {
+          return Response.json(
+            {
+              ok: false,
+              error:
+                "Invalid transaction structure or decoding failed. Make sure it is a standard USDT transfer.",
+            },
+            { status: 400 },
+          );
+        }
       }
     }
 
@@ -440,7 +540,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     if (urlsToAudit.length === 0) {
       return Response.json(
         { ok: false, error: "No valid repository URL provided." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -461,8 +561,11 @@ const handleJudge = async ({ request }: { request: Request }) => {
       const repoRef = parseGitHubRepo(urlToAudit);
       if (!repoRef) {
         return Response.json(
-          { ok: false, error: `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.` },
-          { status: 400 }
+          {
+            ok: false,
+            error: `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.`,
+          },
+          { status: 400 },
         );
       }
 
@@ -481,19 +584,25 @@ const handleJudge = async ({ request }: { request: Request }) => {
           if (response.status === 404) {
             return Response.json(
               { ok: false, error: `GitHub repository is private or does not exist: ${urlToAudit}` },
-              { status: 404 }
+              { status: 404 },
             );
           } else {
             return Response.json(
-              { ok: false, error: `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}` },
-              { status: response.status }
+              {
+                ok: false,
+                error: `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}`,
+              },
+              { status: response.status },
             );
           }
         }
       } catch (err) {
         return Response.json(
-          { ok: false, error: `Failed to verify repository accessibility: ${err instanceof Error ? err.message : String(err)}` },
-          { status: 502 }
+          {
+            ok: false,
+            error: `Failed to verify repository accessibility: ${err instanceof Error ? err.message : String(err)}`,
+          },
+          { status: 502 },
         );
       }
     }
@@ -569,7 +678,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
         weighted_score: 0,
       };
 
-      const filteredAgents = agents.filter(agent => targetAgentSlugs.includes(agent.slug));
+      const filteredAgents = agents.filter((agent) => targetAgentSlugs.includes(agent.slug));
       const evalPromises = filteredAgents.map(async (agent) => {
         const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
           name: `${agent.name} Evaluation`,
@@ -607,6 +716,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             criterion,
             hackathon,
             submission,
+            { isDirectAudit: true },
           );
           return {
             agent: agent.name,
@@ -648,7 +758,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     if (batchResults.length === 0) {
       return Response.json(
         { ok: false, error: "Audit pipeline yielded no results." },
-        { status: 500 }
+        { status: 500 },
       );
     }
 

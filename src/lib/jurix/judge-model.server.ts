@@ -115,7 +115,11 @@ export function parseGitHubRepo(url: string | null): { owner: string; repo: stri
   }
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 4000,
+): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -133,15 +137,19 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "jurixai-judge-bot",
-        ...(process.env.GITHUB_TOKEN?.trim()
-          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-          : {}),
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          "user-agent": "jurixai-judge-bot",
+          ...(process.env.GITHUB_TOKEN?.trim()
+            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+            : {}),
+        },
       },
-    }, 4000);
+      4000,
+    );
 
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -153,15 +161,19 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 async function fetchText(url: string): Promise<string | null> {
   try {
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
-        "user-agent": "jurixai-judge-bot",
-        ...(process.env.GITHUB_TOKEN?.trim()
-          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-          : {}),
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+          "user-agent": "jurixai-judge-bot",
+          ...(process.env.GITHUB_TOKEN?.trim()
+            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+            : {}),
+        },
       },
-    }, 4000);
+      4000,
+    );
 
     if (!response.ok) return null;
     return await response.text();
@@ -173,15 +185,19 @@ async function fetchText(url: string): Promise<string | null> {
 
 async function fetchJsonDetailed<T>(url: string): Promise<FetchResult<T>> {
   try {
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "jurixai-judge-bot",
-        ...(process.env.GITHUB_TOKEN?.trim()
-          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-          : {}),
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          "user-agent": "jurixai-judge-bot",
+          ...(process.env.GITHUB_TOKEN?.trim()
+            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+            : {}),
+        },
       },
-    }, 4000);
+      4000,
+    );
 
     return {
       ok: response.ok,
@@ -196,15 +212,19 @@ async function fetchJsonDetailed<T>(url: string): Promise<FetchResult<T>> {
 
 async function fetchTextDetailed(url: string): Promise<FetchResult<string>> {
   try {
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
-        "user-agent": "jurixai-judge-bot",
-        ...(process.env.GITHUB_TOKEN?.trim()
-          ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-          : {}),
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          accept: "text/plain, text/html;q=0.9, application/vnd.github.raw+json;q=0.8, */*;q=0.1",
+          "user-agent": "jurixai-judge-bot",
+          ...(process.env.GITHUB_TOKEN?.trim()
+            ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+            : {}),
+        },
       },
-    }, 4000);
+      4000,
+    );
 
     return {
       ok: response.ok,
@@ -386,7 +406,38 @@ function buildSubmissionSignals(
   hackathon: HackathonSummary,
   submission: SubmissionSummary,
   repoContext: RepoContext | null,
+  options?: { isDirectAudit?: boolean },
 ): SubmissionSignals {
+  const isDirectAudit = options?.isDirectAudit ?? false;
+  if (isDirectAudit) {
+    const combinedRepo =
+      `${repoContext?.summary ?? ""} ${repoContext?.evidence.join(" ") ?? ""}`.toLowerCase();
+    const repoInaccessible = /private or inaccessible to anonymous fetches/.test(combinedRepo);
+    const repoAccessible = Boolean(repoContext) && !repoInaccessible;
+    const hasReadme = /readme present/.test(combinedRepo) || /readme excerpt:/.test(combinedRepo);
+    const hasPackageJson =
+      /package\.json present/.test(combinedRepo) || /package\.json excerpt:/.test(combinedRepo);
+
+    return {
+      hasGithub: Boolean(submission.github_url?.trim()),
+      hasDemo: false,
+      hasVideo: false,
+      demoRequired: false,
+      videoRequired: false,
+      entryPaid: true,
+      hasDescription: Boolean(submission.description?.trim()),
+      repoAccessible,
+      repoInaccessible,
+      hasReadme,
+      hasPackageJson,
+      demoPlaceholder: false,
+      videoPlaceholder: false,
+      namingMismatch: false,
+      deliverablesMissing: [],
+      briefMismatch: false,
+    };
+  }
+
   const description = submission.description?.trim().toLowerCase() ?? "";
   const brief = [
     hackathon.name,
@@ -487,10 +538,93 @@ function buildFallbackEvaluation(
   submission: SubmissionSummary,
   repoContext: RepoContext | null,
   reason: string,
+  options?: { isDirectAudit?: boolean },
 ): AgentEvaluation {
-  const signals = buildSubmissionSignals(criterion, hackathon, submission, repoContext);
+  const isDirectAudit = options?.isDirectAudit ?? false;
+  const signals = buildSubmissionSignals(criterion, hackathon, submission, repoContext, options);
   const criterionText =
     `${criterion.name} ${criterion.description ?? ""} ${agent.focus_area}`.toLowerCase();
+
+  if (isDirectAudit) {
+    let score = 7.5;
+    let confidence = 0.8;
+    const evidence: string[] = [];
+    const flags: string[] = [];
+
+    if (signals.hasDescription) {
+      evidence.push("Audit context description was provided");
+    } else {
+      flags.push("missing_description");
+      score -= 1.0;
+    }
+
+    if (signals.hasGithub) {
+      evidence.push(`GitHub repository: ${submission.github_url}`);
+    } else {
+      flags.push("missing_repo");
+      score -= 2.0;
+    }
+
+    if (signals.repoAccessible) {
+      evidence.push(...(repoContext?.evidence ?? []).slice(0, 2));
+      score += 0.5;
+    }
+
+    if (signals.repoInaccessible) {
+      evidence.push("Repository is private or inaccessible anonymously");
+      flags.push("inaccessible_repo");
+      score -= 2.5;
+      confidence -= 0.2;
+    }
+
+    if (
+      criterionText.includes("code") ||
+      criterionText.includes("engineering") ||
+      criterionText.includes("technical")
+    ) {
+      if (signals.hasPackageJson) score += 0.5;
+      if (signals.hasReadme) score += 0.5;
+      if (!signals.hasReadme) flags.push("weak_readme");
+    } else if (criterionText.includes("delivery") || criterionText.includes("documentation")) {
+      if (!signals.hasReadme) {
+        score -= 1.5;
+        flags.push("weak_readme");
+      }
+    }
+
+    if (evidence.length === 0) {
+      evidence.push("Scored from repository record");
+      flags.push("low_evidence");
+      confidence -= 0.1;
+    }
+
+    const rationaleParts = [
+      `General repository audit for ${submission.project_name || "project"}.`,
+      signals.repoInaccessible
+        ? "The repository could not be publicly cloned or inspected, reducing evaluation score."
+        : "The repository files and structure were analyzed.",
+      !signals.hasReadme ? "Documentation (README) is missing or incomplete." : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const finalFlags = unique(flags).slice(0, 6);
+    const finalEvidence = unique(evidence).slice(0, 6);
+
+    if (reason) {
+      finalFlags.push("fallback_scoring");
+      finalEvidence.unshift(`model_error: ${reason}`.slice(0, 240));
+    }
+
+    return {
+      score: Number(clamp(score, 1, 10).toFixed(2)),
+      confidence: Number(clamp(confidence, 0.2, 0.95).toFixed(2)),
+      rationale: truncate(rationaleParts, 320),
+      evidence: finalEvidence,
+      flags: unique(finalFlags).slice(0, 6),
+    };
+  }
+
   let score = 6.4;
   let confidence = 0.64;
   const evidence: string[] = [];
@@ -728,9 +862,69 @@ function getJudgeModelConfig(): JudgeModelConfig {
   };
 }
 
-function buildSystemPrompt(agent: JudgeAgent, criterion: JudgingCriterion): string {
+function buildSystemPrompt(
+  agent: JudgeAgent,
+  criterion: JudgingCriterion,
+  options?: { isDirectAudit?: boolean },
+): string {
   const agentSlug = agent.slug.toLowerCase();
   const criterionText = `${criterion.name} ${criterion.description ?? ""}`.toLowerCase();
+  const isDirectAudit = options?.isDirectAudit ?? false;
+
+  if (isDirectAudit) {
+    let specificInstructions = "";
+    if (agentSlug === "vex-01") {
+      specificInstructions = [
+        "Code quality audit mode:",
+        "- Evaluate code style, security vulnerabilities, test coverage, project structure, and maintainability.",
+        "- Identify the key technical strengths and the most critical technical weak spots or vulnerabilities.",
+      ].join("\n");
+    } else if (agentSlug === "kael-02") {
+      specificInstructions = [
+        "Product Design & UX audit mode:",
+        "- Evaluate the product concept, user flow, and general UI/UX as evidenced by codebase files (assets, routes, components).",
+        "- Identify the key UX highlights/strengths and the most significant design/usability gaps or weak spots.",
+      ].join("\n");
+    } else if (agentSlug === "oryn-03") {
+      specificInstructions = [
+        "Innovation & Originality audit mode:",
+        "- Evaluate the technical novelty, complexity, architectural boldness, and unique value proposition.",
+        "- Identify the most innovative strengths of the implementation and any architectural weak spots or limitations.",
+      ].join("\n");
+    } else if (agentSlug === "zera-04") {
+      specificInstructions = [
+        "Completeness & Execution audit mode:",
+        "- Evaluate README documentation, setup instructions, configuration completeness, and ease of deployment/use.",
+        "- Identify the key documentation strengths and the biggest gaps or weak spots in setup/operational files.",
+      ].join("\n");
+    }
+
+    return [
+      "You are an autonomous repository auditor and technical consultant.",
+      `Auditor identity: ${agent.name} (${agent.role}).`,
+      `Focus area: ${agent.focus_area}.`,
+      `Stored system prompt: ${agent.system_prompt ?? "Not provided"}.`,
+      `Stored scoring notes: ${agent.scoring_notes ?? "Not provided"}.`,
+      `Criterion name: ${criterion.name}.`,
+      `Criterion description: ${criterion.description ?? "Not provided"}.`,
+      "Score only what is supported by the repository contents and metadata you receive.",
+      "Do not invent repository contents, mock behaviors, or metrics.",
+      "This is a direct repository quality audit for a professional customer. Do NOT apply hackathon submission rules, submission deliverables (like video links or demo sites), or off-brief checks. Evaluate the repository solely on its technical merits, product design, innovation, and completeness.",
+      "Do NOT check or care if this is the user's own project. Do NOT penalize the project for being an open-source library or an existing codebase (e.g. tinygrad). Audit the codebase exactly as it is.",
+      "Identify the strengths and weak spots under this criterion.",
+      "The rationale must highlight concrete strengths and weak spots, not a generic summary, and explain how they affected the score.",
+      "The rationale must mention at least one concrete codebase fact (files, packages, architecture pattern) and explain how it affected the score.",
+      "Use a 1.00 to 10.00 score scale.",
+      "Return exactly 5 lines and nothing else.",
+      "Do not use markdown fences.",
+      "Keep the rationale under 320 characters.",
+      "Keep evidence entries short and concrete.",
+      specificInstructions,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   const kaelInstructions =
     agentSlug === "kael-02" ||
     criterionText.includes("product") ||
@@ -775,18 +969,58 @@ function buildUserPrompt(
   hackathon: HackathonSummary,
   submission: SubmissionSummary,
   repoContext: RepoContext | null,
+  options?: { isDirectAudit?: boolean },
 ): string {
+  const isDirectAudit = options?.isDirectAudit ?? false;
   const criterionFocus = [
-    `Assigned judge: ${agent.name} (${agent.role})`,
+    `Assigned auditor: ${agent.name} (${agent.role})`,
     `Assigned criterion: ${criterion.name}`,
     `Criterion details: ${optional(criterion.description)}`,
     `Criterion weight: ${criterion.weight_percent}%`,
   ].join("\n");
 
+  if (isDirectAudit) {
+    return [
+      "Evaluate this repository against the assigned criterion.",
+      "",
+      criterionFocus,
+      "",
+      `Audit intent: General Repository Quality Audit`,
+      `Context description: ${optional(submission.description)}`,
+      "",
+      `Project name: ${submission.project_name}`,
+      `GitHub URL: ${optional(submission.github_url)}`,
+      "",
+      `Public repo inspection: ${repoContext ? "available" : "not available"}`,
+      repoContext ? repoContext.summary : "Repo inspection summary: Not available.",
+      "",
+      "Return exactly these 5 lines:",
+      "SCORE: <number 1-10>",
+      "CONFIDENCE: <number 0-1>",
+      "RATIONALE: <one short sentence highlighting strengths and weak spots>",
+      "EVIDENCE: <item 1>; <item 2>; <item 3>",
+      "FLAGS: <flag1>, <flag2>, <flag3>",
+      "",
+      "Rules:",
+      '- "score" must be between 1 and 10. Since this is a real product/repository, grade it strictly and fairly based on the actual codebase complexity and quality.',
+      '- "confidence" must be between 0 and 1.',
+      '- "rationale" must be specific to this codebase and criterion, and 320 characters or fewer.',
+      '- "rationale" must highlight concrete strengths and weak spots, not a generic summary.',
+      '- "evidence" must contain at most 3 short observations from the repo files and structure.',
+      '- "flags" should contain short machine-readable labels for deficiencies (e.g. weak_readme, weak_docs, weak_repo_structure, no_tests, security_risk) or "none". Do NOT output off_brief, missing_demo, missing_video, or not_own_repo flags.',
+      '- If there are no flags, write "FLAGS: none".',
+    ].join("\n");
+  }
+
   return [
     "Evaluate this submission against the assigned criterion.",
     "",
-    criterionFocus,
+    [
+      `Assigned judge: ${agent.name} (${agent.role})`,
+      `Assigned criterion: ${criterion.name}`,
+      `Criterion details: ${optional(criterion.description)}`,
+      `Criterion weight: ${criterion.weight_percent}%`,
+    ].join("\n"),
     "",
     `Hackathon name: ${hackathon.name}`,
     `Hackathon brief: ${optional(hackathon.description)}`,
@@ -890,14 +1124,18 @@ async function requestJudgeModel(
   json: Record<string, unknown> | null;
 }> {
   try {
-    const response = await fetchWithTimeout(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    }, 60000);
+      60000,
+    );
 
     const bodyText = await response.text();
     let json: Record<string, unknown> | null = null;
@@ -988,6 +1226,7 @@ export async function evaluateSubmissionWithModel(
   criterion: JudgingCriterion,
   hackathon: HackathonSummary,
   submission: SubmissionSummary,
+  options?: { isDirectAudit?: boolean },
 ): Promise<AgentEvaluation> {
   const repoContext = await loadRepoContextCached(submission.github_url);
   const config = getJudgeModelConfig();
@@ -1006,16 +1245,20 @@ export async function evaluateSubmissionWithModel(
           {
             model: config.model,
             messages: [
-              { role: "system", content: buildSystemPrompt(agent, criterion) },
+              { role: "system", content: buildSystemPrompt(agent, criterion, options) },
               {
                 role: "user",
-                content: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
+                content: buildUserPrompt(
+                  agent,
+                  criterion,
+                  hackathon,
+                  submission,
+                  repoContext,
+                  options,
+                ),
               },
             ],
             temperature: 0.0,
-            // Keep the smoke test and production path aligned: reasoning models
-            // need enough output budget to finish their internal reasoning and
-            // still emit the required 5-line verdict.
             max_tokens: 4000,
           },
         ]
@@ -1025,14 +1268,23 @@ export async function evaluateSubmissionWithModel(
             input: [
               {
                 role: "system",
-                content: [{ type: "input_text", text: buildSystemPrompt(agent, criterion) }],
+                content: [
+                  { type: "input_text", text: buildSystemPrompt(agent, criterion, options) },
+                ],
               },
               {
                 role: "user",
                 content: [
                   {
                     type: "input_text",
-                    text: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
+                    text: buildUserPrompt(
+                      agent,
+                      criterion,
+                      hackathon,
+                      submission,
+                      repoContext,
+                      options,
+                    ),
                   },
                 ],
               },
@@ -1069,14 +1321,23 @@ export async function evaluateSubmissionWithModel(
             input: [
               {
                 role: "system",
-                content: [{ type: "input_text", text: buildSystemPrompt(agent, criterion) }],
+                content: [
+                  { type: "input_text", text: buildSystemPrompt(agent, criterion, options) },
+                ],
               },
               {
                 role: "user",
                 content: [
                   {
                     type: "input_text",
-                    text: buildUserPrompt(agent, criterion, hackathon, submission, repoContext),
+                    text: buildUserPrompt(
+                      agent,
+                      criterion,
+                      hackathon,
+                      submission,
+                      repoContext,
+                      options,
+                    ),
                   },
                 ],
               },
@@ -1085,6 +1346,7 @@ export async function evaluateSubmissionWithModel(
         ];
 
   let lastError = "Judge model returned an empty response.";
+  let finalEvaluation: AgentEvaluation | null = null;
 
   for (const body of requestBodies) {
     const result = await requestJudgeModel(finalEndpoint, config.apiKey, body);
@@ -1093,13 +1355,13 @@ export async function evaluateSubmissionWithModel(
       continue;
     }
 
-    const payload = (result.json ?? {}) as any;
+    const payload = (result.json ?? {}) as Record<string, unknown>;
     const raw =
-      extractTextFromUnknown(payload.output_text) ||
-      extractTextFromUnknown(payload.reply) ||
-      extractTextFromUnknown(payload.text) ||
-      extractChoiceText(Array.isArray(payload.choices) ? payload.choices[0] : null) ||
-      extractTextFromUnknown(payload.output?.[0]) ||
+      extractTextFromUnknown(payload["output_text"]) ||
+      extractTextFromUnknown(payload["reply"]) ||
+      extractTextFromUnknown(payload["text"]) ||
+      extractChoiceText(Array.isArray(payload["choices"]) ? payload["choices"][0] : null) ||
+      extractTextFromUnknown((payload["output"] as unknown[])?.[0]) ||
       extractTextFromUnknown(payload);
 
     if (!raw) {
@@ -1115,7 +1377,7 @@ export async function evaluateSubmissionWithModel(
           typeof parsed.confidence === "number" &&
           typeof parsed.rationale === "string"
         ) {
-          return {
+          finalEvaluation = {
             score: Number(clamp(parsed.score, 1, 10).toFixed(2)),
             confidence: Number(clamp(parsed.confidence, 0, 1).toFixed(2)),
             rationale: parsed.rationale.trim(),
@@ -1126,16 +1388,56 @@ export async function evaluateSubmissionWithModel(
               ? parsed.flags.map(String).filter(Boolean).slice(0, 6)
               : [],
           };
+          break;
         }
       } catch {
         // Fall through to line-based validation.
       }
     }
 
-    return validateEvaluation(raw);
+    try {
+      finalEvaluation = validateEvaluation(raw);
+      break;
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+    }
   }
 
-  throw new Error(
-    `Model judging did not produce a valid evaluation. Heuristic fallback is disabled. ${lastError}`,
-  );
+  if (!finalEvaluation) {
+    try {
+      finalEvaluation = buildFallbackEvaluation(
+        agent,
+        criterion,
+        hackathon,
+        submission,
+        repoContext,
+        lastError,
+        options,
+      );
+    } catch (fallbackErr) {
+      throw new Error(
+        `Model judging did not produce a valid evaluation. Fallback failed. ${lastError}. Fallback error: ${fallbackErr}`,
+      );
+    }
+  }
+
+  // Clean forbidden flags for direct repository audits
+  if (options?.isDirectAudit && finalEvaluation) {
+    const forbiddenFlags = [
+      "off_brief",
+      "not_own_repo",
+      "not_the_teams_own_repo",
+      "missing_demo",
+      "missing_video",
+      "placeholder_demo",
+      "placeholder_video",
+      "entry_unpaid",
+      "naming_mismatch",
+    ];
+    finalEvaluation.flags = finalEvaluation.flags.filter(
+      (flag) => !forbiddenFlags.includes(flag.toLowerCase().trim()),
+    );
+  }
+
+  return finalEvaluation;
 }
