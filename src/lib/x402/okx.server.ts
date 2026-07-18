@@ -219,6 +219,7 @@ export function instructionsToResponse(instructions: HTTPResponseInstructions): 
   // Rewrite payment-required challenge URL if present to match the official OKX.AI listing URL
   const paymentRequiredHeader = headers.get("payment-required");
   if (paymentRequiredHeader) {
+    headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
     try {
       const decoded = JSON.parse(Buffer.from(paymentRequiredHeader, "base64").toString("utf8"));
       if (decoded.resource && decoded.resource.url) {

@@ -316,6 +316,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             headers: {
               "Content-Type": "application/json",
               "PAYMENT-REQUIRED": challengeBase64,
+              "Cache-Control": "no-store, no-cache, must-revalidate",
             },
           }
         );
