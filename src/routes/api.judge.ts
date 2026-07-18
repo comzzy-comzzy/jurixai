@@ -223,6 +223,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     }
 
     let paymentData: any = null;
+    let isReplay = false;
 
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
@@ -320,7 +321,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
         );
       }
 
-      // Prevent replay attack by checking if txHash has already been registered
+      // Check if txHash has already been registered (indicates a replay attempt to retrieve results)
       const { data: existingPayment } = await supabase
         .from("payments")
         .select("id")
@@ -328,16 +329,11 @@ const handleJudge = async ({ request }: { request: Request }) => {
         .maybeSingle();
 
       if (existingPayment) {
-        return Response.json(
-          {
-            ok: false,
-            error: "This transaction hash has already been used to fund an evaluation.",
-          },
-          { status: 400 },
-        );
+        isReplay = true;
       }
 
-      // Check transaction on chain
+      if (!isReplay) {
+        // Check transaction on chain
       const isXLayer = CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet";
       let verifyRpc = ARC_RPC_URL;
       let verifyUsdc = USDC_ADDRESS;
@@ -435,6 +431,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
           },
           { status: 400 },
         );
+      }
       }
     }
 
@@ -677,7 +674,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     }
 
     // Log payment in DB now that the evaluations succeeded
-    if (!sandbox && paymentData) {
+    if (!sandbox && paymentData && !isReplay) {
       await supabase.from("payments").insert(paymentData);
     }
 
