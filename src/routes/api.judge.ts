@@ -414,7 +414,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             {
               scheme: "exact",
               network: "eip155:196", // X Layer Mainnet
-              asset: "0x1e4a5963ab75d8c9021ce480b42188849d41d7d9", // USDT on X Layer Mainnet
+              asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT on X Layer Mainnet
               amount: amount,
               payTo: operatorAddress,
               maxTimeoutSeconds: 300,
