@@ -71,6 +71,24 @@ update public.judge_agents set wallet_address = '0x1F996D3ecFAF4b3348451959d4f8f
     ```
 3. Open `http://localhost:3000`.
 
+## OKX.AI Reviewer Startup
+
+OKX/Claude reviewer sessions must start without dangerous permission bypass flags when the runtime user is `root` or uses `sudo`. Claude CLI rejects options such as `--dangerously-skip-permissions` in privileged sessions, which prevents the review agent from starting and can make the service appear unresponsive.
+
+Use the normal non-bypass startup path instead:
+
+```bash
+npm run build
+npm run preview
+```
+
+For CLI smoke tests, also avoid bypass flags:
+
+```bash
+claude -p --permission-mode acceptEdits "Reply with the single word OK."
+codex exec --sandbox workspace-write "Reply with the single word OK."
+```
+
 ## 🌐 Browser Compatibility Note (Chrome/Safari/Brave)
 Because Circle's secure wallet SDK relies on cross-origin iframes (`w3s.circle.com`) to manage device authentication and store keys securely:
 *   **Brave Browser (PC):** Works perfectly out-of-the-box on PC. We highly recommend using Brave Browser for a seamless experience.
