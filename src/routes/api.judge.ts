@@ -5,6 +5,7 @@ import { createPublicClient, http, decodeFunctionData } from "viem";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
 import { getOperatorAddress } from "@/lib/chain.server";
 import {
+  buildPaymentRequiredResponse,
   processOkxPayment,
   instructionsToResponse,
   type OkxPaymentResult,
@@ -454,51 +455,19 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const okxVerified = okxPayment?.type === "payment-verified" ? okxPayment : null;
 
     // 1b. Legacy flow: verify a direct USDT0 transfer on X Layer Mainnet by txHash.
-    // Also serves the manual 402 challenge when the OKX facilitator is unavailable.
+    // Also serves the standard 402 challenge when the OKX facilitator is unavailable.
     if (!sandbox && !okxVerified) {
       if (!txHash) {
-        const endpointUrl = "https://www.jurixai.xyz/api/judge";
         const operatorAddress = getOperatorAddress();
-        const amount = expectedMin.toString();
-
-        const challenge = {
-          x402Version: 2,
-          resource: {
-            url: endpointUrl,
+        return instructionsToResponse(
+          buildPaymentRequiredResponse({
+            resourceUrl: new URL(request.url).toString(),
             description: `JuriXAI Auditor: Modular multi-agent repository quality audit service (Agents: ${targetAgentSlugs.join(", ")}).`,
-            mimeType: "application/json",
-          },
-          accepts: [
-            {
-              scheme: "exact",
-              network: "eip155:196", // X Layer Mainnet
-              asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736", // USDT on X Layer Mainnet
-              amount: amount,
-              payTo: operatorAddress,
-              maxTimeoutSeconds: 300,
-              symbol: "USDT",
-              decimals: 6,
-              extra: { name: "USDT", symbol: "USDT", decimals: 6, version: "1" },
-            },
-          ],
-        };
-
-        const challengeBase64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
-
-        const responseBody = {
-          ok: false,
-          error: "Payment transaction hash is required for mainnet mode.",
-          ...challenge,
-        };
-
-        return new Response(JSON.stringify(responseBody), {
-          status: 402,
-          headers: {
-            "Content-Type": "application/json",
-            "PAYMENT-REQUIRED": challengeBase64,
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-          },
-        });
+            amount: expectedMin,
+            payTo: operatorAddress,
+            errorMessage: "Payment required. Use a standard x402 PAYMENT-SIGNATURE header or provide a valid txHash.",
+          }),
+        );
       }
 
       // Check if txHash has already been registered (prevents stealing/reusing transaction hashes)

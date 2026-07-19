@@ -38,6 +38,49 @@ export interface JudgeRequestParams {
   repoCount: number;
 }
 
+export function buildPaymentRequiredResponse(params: {
+  resourceUrl: string;
+  description: string;
+  amount: bigint;
+  payTo: string;
+  errorMessage?: string;
+}): HTTPResponseInstructions {
+  const paymentRequired = {
+    x402Version: 2,
+    resource: {
+      url: params.resourceUrl,
+      description: params.description,
+      mimeType: "application/json",
+    },
+    accepts: [
+      {
+        scheme: "exact",
+        network: XLAYER_NETWORK,
+        asset: USDT0_ASSET,
+        amount: params.amount.toString(),
+        payTo: params.payTo,
+        maxTimeoutSeconds: 300,
+        symbol: "USDT",
+        decimals: 6,
+        extra: { ...USDT0_EXTRA },
+      },
+    ],
+    error: params.errorMessage,
+  };
+
+  return {
+    status: 402,
+    headers: {
+      "Content-Type": "application/json",
+      "PAYMENT-REQUIRED": Buffer.from(JSON.stringify(paymentRequired)).toString("base64"),
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+    body: {
+      error: params.errorMessage ?? "Payment required",
+    },
+  };
+}
+
 /** Total price in USDT0 minimum units for the requested agents × repositories. */
 export function computeExpectedAmount({ agentSlugs, repoCount }: JudgeRequestParams): bigint {
   const feePerRepo = agentSlugs.reduce((sum, slug) => sum + (AGENTS_PRICING[slug] || 0n), 0n);
@@ -220,22 +263,6 @@ export async function processOkxPayment(
 /** Convert SDK HTTPResponseInstructions into a Fetch API Response. */
 export function instructionsToResponse(instructions: HTTPResponseInstructions): Response {
   const headers = new Headers(instructions.headers);
-
-  // Rewrite payment-required challenge URL if present to match the official OKX.AI listing URL
-  const paymentRequiredHeader = headers.get("payment-required");
-  if (paymentRequiredHeader) {
-    headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-    try {
-      const decoded = JSON.parse(Buffer.from(paymentRequiredHeader, "base64").toString("utf8"));
-      if (decoded.resource && decoded.resource.url) {
-        decoded.resource.url = "https://www.jurixai.xyz/api/judge";
-        const reEncoded = Buffer.from(JSON.stringify(decoded)).toString("base64");
-        headers.set("payment-required", reEncoded);
-      }
-    } catch (e) {
-      console.error("[x402] Failed to rewrite payment-required header URL:", e);
-    }
-  }
 
   if (instructions.isHtml) {
     if (!headers.has("Content-Type")) headers.set("Content-Type", "text/html; charset=utf-8");
