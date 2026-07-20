@@ -18,7 +18,7 @@ import type {
   HTTPResponseInstructions,
 } from "@okxweb3/x402-core/http";
 import { ExactEvmScheme } from "@okxweb3/x402-evm/exact/server";
-import { getOperatorAddress } from "@/lib/chain.server";
+import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
 
 export const XLAYER_NETWORK = "eip155:196" as const;
 export const USDT0_ASSET = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
@@ -110,7 +110,7 @@ function buildRouteConfig(params: JudgeRequestParams) {
   const accepts = {
     scheme: "exact",
     network: XLAYER_NETWORK,
-    payTo: getOperatorAddress(),
+    payTo: JURIX_X402_PAY_TO,
     price: { amount, asset: USDT0_ASSET, symbol: "USDT", decimals: 6, extra: { ...USDT0_EXTRA } },
     maxTimeoutSeconds: 300,
     symbol: "USDT",

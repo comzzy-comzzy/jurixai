@@ -1,8 +1,9 @@
 import { createPublicClient, http } from "viem";
 import { activeChain, ARC_RPC_URL } from "../src/lib/chain.js";
+import { getOperatorAddress } from "../src/lib/chain.server.js";
 
 async function main() {
-  const operatorAddress = "0x5A305347b6BC3469505886d87D41C5EFC1A5E979";
+  const operatorAddress = getOperatorAddress();
   
   const client = createPublicClient({
     chain: activeChain,

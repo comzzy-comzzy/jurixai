@@ -1,10 +1,11 @@
 import { createPublicClient, http, erc20Abi } from "viem";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS, readUsdcBalance } from "../src/lib/chain.js";
 import { ESCROW_CONTRACT_ADDRESS } from "../src/lib/chain.js";
+import { getOperatorAddress } from "../src/lib/chain.server.js";
 
 async function main() {
   const userAddress = "0xc29596c4b07a794701f57d4b1dc491ec972ebf2b";
-  const operatorAddress = "0x5A305347b6BC3469505886d87D41C5EFC1A5E979";
+  const operatorAddress = getOperatorAddress();
 
   console.log("Checking live USDC balances on Arc Testnet:\n");
 

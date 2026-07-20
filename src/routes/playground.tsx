@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CHAIN_NAME } from "@/lib/chain";
+import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
 
 export const Route = createFileRoute("/playground")({
   component: Playground,
@@ -106,7 +107,6 @@ function Playground() {
     }
   }, [terminalLogs]);
 
-  const operatorAddress = "0x5A305347b6BC3469505886d87D41C5EFC1A5E979";
   const parsedUrls = rawUrls
     .split("\n")
     .map((u) => u.trim())
@@ -117,7 +117,7 @@ function Playground() {
   const dynamicRequiredUsdt = (currentRepoCount * feePerRepo).toFixed(3);
 
   const handleCopyAddr = () => {
-    navigator.clipboard.writeText(operatorAddress);
+    navigator.clipboard.writeText(JURIX_X402_PAY_TO);
     setIsCopied(true);
     toast.success("Address copied to clipboard!");
     setTimeout(() => setIsCopied(false), 2000);
@@ -565,7 +565,7 @@ function Playground() {
                         <strong className="text-foreground">
                           {dynamicRequiredUsdt} {tokenSymbol}
                         </strong>{" "}
-                        to the JuriXAI operator address on {networkName}.
+                        to the JuriXAI Agentic Wallet on {networkName}.
                       </p>
                     </div>
                   </div>
@@ -573,11 +573,11 @@ function Playground() {
                   <div className="space-y-2 mt-2">
                     <div className="flex items-center justify-between bg-muted/60 p-2 rounded border border-border/40">
                       <span className="text-[10px] font-mono text-muted-foreground">
-                        Recipient (Operator)
+                        Recipient (Agentic Wallet)
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-mono text-foreground">
-                          {operatorAddress.slice(0, 6)}...{operatorAddress.slice(-4)}
+                          {JURIX_X402_PAY_TO.slice(0, 6)}...{JURIX_X402_PAY_TO.slice(-4)}
                         </span>
                         <button
                           type="button"

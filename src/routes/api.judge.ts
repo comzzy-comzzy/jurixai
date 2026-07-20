@@ -3,13 +3,13 @@ import { evaluateSubmissionWithModel, parseGitHubRepo } from "@/lib/jurix/judge-
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createPublicClient, http, decodeFunctionData } from "viem";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS, CHAIN_NAME } from "@/lib/chain";
-import { getOperatorAddress } from "@/lib/chain.server";
 import {
   buildPaymentRequiredResponse,
   processOkxPayment,
   instructionsToResponse,
   type OkxPaymentResult,
 } from "@/lib/x402/okx.server";
+import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
 import type {
   JudgeAgent,
   JudgingCriterion,
@@ -458,13 +458,12 @@ const handleJudge = async ({ request }: { request: Request }) => {
     // Also serves the standard 402 challenge when the OKX facilitator is unavailable.
     if (!sandbox && !okxVerified) {
       if (!txHash) {
-        const operatorAddress = getOperatorAddress();
         return instructionsToResponse(
           buildPaymentRequiredResponse({
             resourceUrl: new URL(request.url).toString(),
             description: `JuriXAI Auditor: Modular multi-agent repository quality audit service (Agents: ${targetAgentSlugs.join(", ")}).`,
             amount: expectedMin,
-            payTo: operatorAddress,
+            payTo: JURIX_X402_PAY_TO,
             errorMessage: "Payment required. Use a standard x402 PAYMENT-SIGNATURE header or provide a valid txHash.",
           }),
         );
@@ -555,10 +554,9 @@ const handleJudge = async ({ request }: { request: Request }) => {
           const recipient = decoded.args[0];
           const amount = decoded.args[1];
 
-          const operatorAddress = getOperatorAddress();
-          if (recipient.toLowerCase() !== operatorAddress.toLowerCase()) {
+          if (recipient.toLowerCase() !== JURIX_X402_PAY_TO.toLowerCase()) {
             return Response.json(
-              { ok: false, error: "Recipient is not the JuriXAI operator address." },
+              { ok: false, error: "Recipient is not the JuriXAI Auditor payment address." },
               { status: 400 },
             );
           }
@@ -836,7 +834,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       await supabase.from("payments").insert({
         kind: "entry",
         from_address: urlsToAudit[0] || null, // Store the audited repo URL
-        to_address: getOperatorAddress(),
+        to_address: JURIX_X402_PAY_TO,
         amount_usdc: Number(expectedMin) / 1000000,
         circle_tx_id: settleResult.transaction || `x402-${Date.now()}`,
         status: "confirmed",
