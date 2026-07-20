@@ -401,10 +401,10 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
-      "vex-01": 40000n, // 0.04 USDT (Engineering)
-      "kael-02": 30000n, // 0.03 USDT (Product/UX)
-      "oryn-03": 20000n, // 0.02 USDT (Innovation)
-      "zera-04": 20000n, // 0.02 USDT (Completeness/Docs)
+      "vex-01": 250000n, // 0.25 USDT (Engineering)
+      "kael-02": 250000n, // 0.25 USDT (Product/UX)
+      "oryn-03": 250000n, // 0.25 USDT (Innovation)
+      "zera-04": 250000n, // 0.25 USDT (Completeness/Docs)
     };
 
     // Default to all active agents if not provided or empty
@@ -757,13 +757,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
         // In sandbox mode, lock non-Vex agents to enforce payment upgrade
         if (sandbox && agent.slug !== "vex-01") {
-          const individualCost = Number(AGENTS_PRICING[agent.slug] || 20000n) / 1000000;
+          const individualCost = Number(AGENTS_PRICING[agent.slug] || 250000n) / 1000000;
           return {
             agent: agent.name,
             role: agent.role,
             score: 0,
             confidence: 0,
-            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 0.11 USDT to unlock the full 4-agent suite.`,
+            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 1 USDT to unlock the full 4-agent suite.`,
             evidence: [],
             flags: ["LOCKED_SANDBOX"],
           };

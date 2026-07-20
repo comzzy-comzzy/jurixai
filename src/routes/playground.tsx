@@ -72,10 +72,10 @@ function Playground() {
 
   const [selectedAgentSlugs, setSelectedAgentSlugs] = useState<string[]>(["vex-01", "kael-02", "oryn-03", "zera-04"]);
   const AGENTS_PRICING: Record<string, number> = {
-    "vex-01": 0.04,
-    "kael-02": 0.03,
-    "oryn-03": 0.02,
-    "zera-04": 0.02,
+    "vex-01": 0.25,
+    "kael-02": 0.25,
+    "oryn-03": 0.25,
+    "zera-04": 0.25,
   };
 
   const [history, setHistory] = useState<any[]>([]);

@@ -26,10 +26,10 @@ export const USDT0_EXTRA = { name: "USDT", symbol: "USDT", decimals: 6, version:
 
 /** Per-agent pricing in USDT0 minimum units (6 decimals). */
 export const AGENTS_PRICING: Record<string, bigint> = {
-  "vex-01": 40000n, // 0.04 USDT (Engineering)
-  "kael-02": 30000n, // 0.03 USDT (Product/UX)
-  "oryn-03": 20000n, // 0.02 USDT (Innovation)
-  "zera-04": 20000n, // 0.02 USDT (Completeness/Docs)
+  "vex-01": 250000n, // 0.25 USDT (Engineering)
+  "kael-02": 250000n, // 0.25 USDT (Product/UX)
+  "oryn-03": 250000n, // 0.25 USDT (Innovation)
+  "zera-04": 250000n, // 0.25 USDT (Completeness/Docs)
 };
 export const DEFAULT_AGENT_SLUGS = ["vex-01", "kael-02", "oryn-03", "zera-04"];
 
