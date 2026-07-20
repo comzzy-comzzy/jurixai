@@ -4,7 +4,6 @@ import solc from "solc";
 import { createWalletClient, createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS } from "../src/lib/chain.js";
-import { JURIX_X402_PAY_TO } from "../src/lib/x402/payee.js";
 
 const contractSource = `
 // SPDX-License-Identifier: MIT
@@ -84,13 +83,13 @@ contract JuriXEscrow {
 
 async function main() {
   const privateKey = process.env.JURIX_OPERATOR_PRIVATE_KEY;
-  const feeCollector = process.env.JURIX_FEE_COLLECTOR || JURIX_X402_PAY_TO;
   if (!privateKey) {
     console.error("Missing JURIX_OPERATOR_PRIVATE_KEY");
     process.exit(1);
   }
   const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
   const account = privateKeyToAccount(formattedKey);
+  const feeCollector = process.env.JURIX_FEE_COLLECTOR || account.address;
 
   console.log("Compiling JuriXEscrow Solidity contract...");
   const input = {

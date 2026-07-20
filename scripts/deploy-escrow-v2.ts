@@ -4,7 +4,6 @@ import solc from "solc";
 import { createWalletClient, createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { activeChain, ARC_RPC_URL, USDC_ADDRESS } from "../src/lib/chain.js";
-import { JURIX_X402_PAY_TO } from "../src/lib/x402/payee.js";
 
 const contractSource = `
 // SPDX-License-Identifier: MIT
@@ -34,6 +33,8 @@ contract JuriXEscrow {
     event EscrowRegistered(string hackathonId, address hoster, uint256 prizePool, uint256 platformFee);
     event EscrowDisbursed(string hackathonId, address[] winners, uint256[] amounts);
     event EscrowRefunded(string hackathonId, address hoster, uint256 amount);
+    event OperatorTransferred(address indexed previousOperator, address indexed newOperator);
+    event FeeCollectorUpdated(address indexed previousFeeCollector, address indexed newFeeCollector);
 
     constructor(address _usdcToken, address _feeCollector) {
         operator = msg.sender;
@@ -44,6 +45,18 @@ contract JuriXEscrow {
     modifier onlyOperator() {
         require(msg.sender == operator, "Only operator can call");
         _;
+    }
+
+    function transferOperator(address newOperator) external onlyOperator {
+        require(newOperator != address(0), "Invalid operator");
+        emit OperatorTransferred(operator, newOperator);
+        operator = newOperator;
+    }
+
+    function setFeeCollector(address newFeeCollector) external onlyOperator {
+        require(newFeeCollector != address(0), "Invalid fee collector");
+        emit FeeCollectorUpdated(feeCollector, newFeeCollector);
+        feeCollector = newFeeCollector;
     }
 
     function registerHackathon(
@@ -103,13 +116,13 @@ contract JuriXEscrow {
 
 async function main() {
   const privateKey = process.env.JURIX_OPERATOR_PRIVATE_KEY;
-  const feeCollector = process.env.JURIX_FEE_COLLECTOR || JURIX_X402_PAY_TO;
   if (!privateKey) {
     console.error("Missing JURIX_OPERATOR_PRIVATE_KEY");
     process.exit(1);
   }
   const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
   const account = privateKeyToAccount(formattedKey);
+  const feeCollector = process.env.JURIX_FEE_COLLECTOR || account.address;
 
   console.log("Compiling JuriXEscrow v2 Solidity contract...");
   const input = {

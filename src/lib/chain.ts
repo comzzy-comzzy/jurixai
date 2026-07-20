@@ -110,7 +110,7 @@ export const ESCROW_CONTRACT_ADDRESS =
   ENV.VITE_ESCROW_CONTRACT_ADDRESS ||
   (CHAIN_NAME === "XLAYER-MAINNET" || CHAIN_NAME === "xlayerMainnet"
     ? "0xd5294c32b2d4b29f141afd97346820af0235191f"
-    : "0x89db74b925f694ebec1118cff9b08a1afe528785");
+    : "0xb48e0b50d44b1609004cbc41c311d478a4900ce3");
 
 export const escrowAbi = [
   {
@@ -152,6 +152,20 @@ export const escrowAbi = [
       { internalType: "uint256", name: "platformFee", type: "uint256" },
     ],
     name: "registerHackathon",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "newFeeCollector", type: "address" }],
+    name: "setFeeCollector",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "newOperator", type: "address" }],
+    name: "transferOperator",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
