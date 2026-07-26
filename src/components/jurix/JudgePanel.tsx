@@ -41,8 +41,7 @@ export function JudgeRow({ judge }: { judge: JudgeAgent }) {
         <img
           src={avatarUrl}
           alt={judge.name}
-          className="size-12 shrink-0 rounded-full object-cover border-2"
-          style={{ borderColor: c }}
+          className="size-12 shrink-0 rounded-full object-cover"
         />
       ) : (
         <div
@@ -105,8 +104,7 @@ export function JudgeGrid({ judges }: { judges: JudgeAgent[] }) {
               <img
                 src={avatarUrl}
                 alt={j.name}
-                className="size-14 rounded-full object-cover border-2"
-                style={{ borderColor: c }}
+                className="size-14 rounded-full object-cover"
               />
             ) : (
               <div
