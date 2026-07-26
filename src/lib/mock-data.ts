@@ -62,14 +62,59 @@ export interface Judge {
   reviewsToday: number;
   reviewsTotal: number;
   colorHex: string;
+  avatarUrl?: string;
 }
 
 export const judges: Judge[] = [
-  { name: "Vex",  initial: "VX", focus: "Engineering Quality",          status: "reviewing", reviewsToday: 14, reviewsTotal: 842,  colorHex: "#00D8C8" },
-  { name: "Kael", initial: "KL", focus: "Architecture",                  status: "idle",      reviewsToday: 9,  reviewsTotal: 1102, colorHex: "#3B82F6" },
-  { name: "Oryn", initial: "OR", focus: "Innovation",                    status: "done",      reviewsToday: 22, reviewsTotal: 954,  colorHex: "#7C3AED" },
-  { name: "Zera", initial: "ZR", focus: "Documentation + Deliverables",  status: "reviewing", reviewsToday: 5,  reviewsTotal: 521,  colorHex: "#EF4444" },
-  { name: "Dusk", initial: "DK", focus: "AI / Agent Integration",        status: "idle",      reviewsToday: 11, reviewsTotal: 389,  colorHex: "#F59E0B" },
+  {
+    name: "Vex",
+    initial: "VX",
+    focus: "Engineering Quality",
+    status: "reviewing",
+    reviewsToday: 14,
+    reviewsTotal: 842,
+    colorHex: "#00D8C8",
+    avatarUrl: "/vex.png",
+  },
+  {
+    name: "Kael",
+    initial: "KL",
+    focus: "Architecture",
+    status: "idle",
+    reviewsToday: 9,
+    reviewsTotal: 1102,
+    colorHex: "#3B82F6",
+    avatarUrl: "/kael.png",
+  },
+  {
+    name: "Oryn",
+    initial: "OR",
+    focus: "Innovation",
+    status: "done",
+    reviewsToday: 22,
+    reviewsTotal: 954,
+    colorHex: "#7C3AED",
+    avatarUrl: "/oryn.png",
+  },
+  {
+    name: "Zera",
+    initial: "ZR",
+    focus: "Documentation + Deliverables",
+    status: "reviewing",
+    reviewsToday: 5,
+    reviewsTotal: 521,
+    colorHex: "#EF4444",
+    avatarUrl: "/zera.png",
+  },
+  {
+    name: "Dusk",
+    initial: "DK",
+    focus: "AI / Agent Integration",
+    status: "idle",
+    reviewsToday: 11,
+    reviewsTotal: 389,
+    colorHex: "#F59E0B",
+  },
 ];
 
 export const defaultCriteria: Omit<Criterion, "id">[] = [

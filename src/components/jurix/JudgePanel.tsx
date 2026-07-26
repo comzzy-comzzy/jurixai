@@ -23,16 +23,35 @@ function judgeIndex(j: JudgeAgent) {
   return i === -1 ? 1 : i + 1;
 }
 
+function getAvatarUrl(judge: JudgeAgent): string | null {
+  if (judge.avatar_url) return judge.avatar_url;
+  const nameLower = judge.name.toLowerCase();
+  if (["vex", "kael", "oryn", "zera"].includes(nameLower)) {
+    return `/${nameLower}.png`;
+  }
+  return null;
+}
+
 export function JudgeRow({ judge }: { judge: JudgeAgent }) {
   const c = judge.color_hex;
+  const avatarUrl = getAvatarUrl(judge);
   return (
     <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4 shadow-sm">
-      <div
-        className="size-12 shrink-0 grid place-items-center rounded-full"
-        style={{ background: `${c}1f`, color: c }}
-      >
-        <span className="text-sm font-bold">{judge.short_code}</span>
-      </div>
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={judge.name}
+          className="size-12 shrink-0 rounded-full object-cover border-2"
+          style={{ borderColor: c }}
+        />
+      ) : (
+        <div
+          className="size-12 shrink-0 grid place-items-center rounded-full"
+          style={{ background: `${c}1f`, color: c }}
+        >
+          <span className="text-sm font-bold">{judge.short_code}</span>
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center gap-2">
           <span className="text-sm font-semibold tracking-tight">
@@ -76,17 +95,27 @@ export function JudgeGrid({ judges }: { judges: JudgeAgent[] }) {
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
       {judges.map((j) => {
         const c = j.color_hex;
+        const avatarUrl = getAvatarUrl(j);
         return (
           <div
             key={j.name}
             className="rounded-xl border border-border bg-card p-5 flex flex-col items-center gap-3 shadow-sm"
           >
-            <div
-              className="size-14 grid place-items-center rounded-full"
-              style={{ background: `${c}1f`, color: c }}
-            >
-              <span className="text-base font-bold">{j.short_code}</span>
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={j.name}
+                className="size-14 rounded-full object-cover border-2"
+                style={{ borderColor: c }}
+              />
+            ) : (
+              <div
+                className="size-14 grid place-items-center rounded-full"
+                style={{ background: `${c}1f`, color: c }}
+              >
+                <span className="text-base font-bold">{j.short_code}</span>
+              </div>
+            )}
             <div className="text-center">
               <p className="text-lg font-bold tracking-tight" style={{ color: c }}>
                 {j.name}

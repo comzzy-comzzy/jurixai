@@ -22,6 +22,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     focus_area: "Code quality, correctness, maintainability, and security basics.",
     status: "idle",
     color_hex: "#00D8C8",
+    avatar_url: "/vex.png",
     weight_percent: 35,
     system_prompt: null,
     scoring_notes: null,
@@ -37,6 +38,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     focus_area: "Problem clarity, UX, user value, and product completeness.",
     status: "idle",
     color_hex: "#3B82F6",
+    avatar_url: "/kael.png",
     weight_percent: 25,
     system_prompt: null,
     scoring_notes: null,
@@ -52,6 +54,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     focus_area: "Originality, ambition, and differentiated thinking.",
     status: "idle",
     color_hex: "#7C3AED",
+    avatar_url: "/oryn.png",
     weight_percent: 20,
     system_prompt: null,
     scoring_notes: null,
@@ -67,6 +70,7 @@ const FALLBACK_AGENTS: JudgeAgent[] = [
     focus_area: "Documentation, reproducibility, polish, and shipping quality.",
     status: "idle",
     color_hex: "#EF4444",
+    avatar_url: "/zera.png",
     weight_percent: 20,
     system_prompt: null,
     scoring_notes: null,
@@ -170,6 +174,13 @@ function normalizeHackathon(row: Record<string, unknown>, submissionCount = 0): 
 }
 
 function normalizeAgent(row: Record<string, unknown>): JudgeAgent {
+  const nameLower = String(row.name).toLowerCase();
+  const avatarUrl = row.avatar_url
+    ? String(row.avatar_url)
+    : ["vex", "kael", "oryn", "zera"].includes(nameLower)
+      ? `/${nameLower}.png`
+      : null;
+
   return {
     id: String(row.id),
     slug: String(row.slug),
@@ -179,6 +190,7 @@ function normalizeAgent(row: Record<string, unknown>): JudgeAgent {
     focus_area: String(row.focus_area),
     status: String(row.status) as JudgeAgent["status"],
     color_hex: String(row.color_hex),
+    avatar_url: avatarUrl,
     weight_percent: toNumber(row.weight_percent),
     system_prompt: row.system_prompt ? String(row.system_prompt) : null,
     scoring_notes: row.scoring_notes ? String(row.scoring_notes) : null,

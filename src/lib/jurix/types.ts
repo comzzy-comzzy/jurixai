@@ -11,6 +11,7 @@ export interface JudgeAgent {
   focus_area: string;
   status: AgentStatus;
   color_hex: string;
+  avatar_url?: string | null;
   weight_percent: number;
   system_prompt: string | null;
   scoring_notes: string | null;
