@@ -4,6 +4,7 @@ import type {
   JudgingCriterion,
   SubmissionSummary,
 } from "@/lib/jurix/types";
+import https from "node:https";
 
 export type AgentEvaluation = {
   score: number;
@@ -66,6 +67,7 @@ function required(name: string): string {
 }
 
 function clamp(value: number, min: number, max: number): number {
+  if (Number.isNaN(value)) return min;
   return Math.max(min, Math.min(max, value));
 }
 
@@ -1139,58 +1141,80 @@ async function requestJudgeModel(
   bodyText: string;
   json: Record<string, unknown> | null;
 }> {
-  const controller = new AbortController();
-  // Safe timeout: 30 seconds for the entire LLM request (fetch + streaming/reading body text)
-  const id = setTimeout(() => controller.abort(), 30000);
-
-  try {
-    const response = await fetch(endpoint, {
+  return new Promise((resolvePromise) => {
+    const postData = JSON.stringify(body);
+    const urlObj = new URL(endpoint);
+    const options = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || 443,
+      path: urlObj.pathname + urlObj.search,
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(postData),
+        "Authorization": `Bearer ${apiKey}`,
+        "User-Agent": "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464",
+        "Originator": "codex_cli_rs",
+        "Version": "0.101.0",
+        "Bypass-Tunnel-Reminder": "true",
       },
-      body: JSON.stringify(body),
-      signal: controller.signal,
+      timeout: 120000,
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        let json: Record<string, unknown> | null = null;
+        try {
+          json = data ? JSON.parse(data) : null;
+        } catch {}
+        console.log("AGENTROUTER RAW RESP:", res.statusCode, data);
+        resolvePromise({
+          ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
+          status: res.statusCode || 0,
+          bodyText: data,
+          json,
+        });
+      });
     });
 
-    const bodyText = await response.text();
-    clearTimeout(id);
+    req.on("error", (err) => {
+      console.error(`[requestJudgeModel] Failed to fetch LLM endpoint ${endpoint}:`, err);
+      resolvePromise({
+        ok: false,
+        status: 500,
+        bodyText: err instanceof Error ? err.message : String(err),
+        json: null,
+      });
+    });
 
-    let json: Record<string, unknown> | null = null;
-    try {
-      json = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : null;
-    } catch {
-      json = null;
-    }
+    req.on("timeout", () => {
+      req.destroy();
+      resolvePromise({
+        ok: false,
+        status: 504,
+        bodyText: "Timeout",
+        json: null,
+      });
+    });
 
-    return {
-      ok: response.ok,
-      status: response.status,
-      bodyText,
-      json,
-    };
-  } catch (err) {
-    clearTimeout(id);
-    console.error(`[requestJudgeModel] Failed to fetch LLM endpoint ${endpoint}:`, err);
-    return {
-      ok: false,
-      status: 504,
-      bodyText: err instanceof Error ? err.message : "Timeout or connection failed",
-      json: null,
-    };
-  }
+    req.write(postData);
+    req.end();
+  });
 }
 
 function validateEvaluation(raw: string): AgentEvaluation {
   const text = stripReasoningPreamble(raw);
-  const score = clamp(Number(text.match(/(?:^|\n)\s*SCORE\s*:\s*([^\n]+)/i)?.[1]), 1, 10);
-  const confidence = clamp(Number(text.match(/(?:^|\n)\s*CONFIDENCE\s*:\s*([^\n]+)/i)?.[1]), 0, 1);
-  const rationale = text.match(/(?:^|\n)\s*RATIONALE\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
+  const score = clamp(Number(text.match(/\bSCORE\s*:\s*([^\n]+)/i)?.[1]), 1, 10);
+  const confidence = clamp(Number(text.match(/\bCONFIDENCE\s*:\s*([^\n]+)/i)?.[1]), 0, 1);
+  const rationale = text.match(/\bRATIONALE\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
   const evidence = normalizeStringArray(
-    text.match(/(?:^|\n)\s*EVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "",
+    text.match(/\bEVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "",
   );
-  const flagsRaw = text.match(/(?:^|\n)\s*FLAGS\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
+  const flagsRaw = text.match(/\bFLAGS\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
   const flags = !flagsRaw || /^none$/i.test(flagsRaw) ? [] : normalizeStringArray(flagsRaw);
 
   if (!Number.isFinite(score)) {

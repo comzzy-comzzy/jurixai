@@ -147,6 +147,7 @@ function generateTextReport(
 
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
+    console.log("HELLO_WORLD_JUDGE_API_CALLED_URL", request.url);
     const url = new URL(request.url);
     let body: Record<string, unknown> = {};
     if (request.method === "POST" || request.method === "PUT") {
@@ -736,7 +737,17 @@ const handleJudge = async ({ request }: { request: Request }) => {
       };
 
       const filteredAgents = agents.filter((agent) => targetAgentSlugs.includes(agent.slug));
-      const evalPromises = filteredAgents.map(async (agent) => {
+      const evaluations: Array<{
+        agent: string;
+        role: string;
+        score: number;
+        confidence: number;
+        rationale: string;
+        evidence: string[];
+        flags: string[];
+      }> = [];
+
+      for (const agent of filteredAgents) {
         const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
           name: `${agent.name} Evaluation`,
           description: agent.focus_area,
@@ -756,7 +767,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
         // In sandbox mode, lock non-Vex agents to enforce payment upgrade
         if (sandbox && agent.slug !== "vex-01") {
           const individualCost = Number(AGENTS_PRICING[agent.slug] || 250000n) / 1000000;
-          return {
+          evaluations.push({
             agent: agent.name,
             role: agent.role,
             score: 0,
@@ -764,7 +775,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
             rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 1 USDT to unlock the full 4-agent suite.`,
             evidence: [],
             flags: ["LOCKED_SANDBOX"],
-          };
+          });
+          continue;
         }
 
         try {
@@ -775,7 +787,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             submission,
             { isDirectAudit: true },
           );
-          return {
+          evaluations.push({
             agent: agent.name,
             role: agent.role,
             score: evaluation.score,
@@ -783,14 +795,12 @@ const handleJudge = async ({ request }: { request: Request }) => {
             rationale: evaluation.rationale,
             evidence: evaluation.evidence,
             flags: evaluation.flags,
-          };
+          });
         } catch (err) {
           console.error(`[api/judge] Agent ${agent.name} evaluation failed:`, err);
           throw err;
         }
-      });
-
-      const evaluations = await Promise.all(evalPromises);
+      }
 
       // Calculate average score
       let totalWeight = 0;
