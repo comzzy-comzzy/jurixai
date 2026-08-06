@@ -1171,7 +1171,7 @@ async function requestJudgeModel(
         try {
           json = data ? JSON.parse(data) : null;
         } catch {}
-        console.log("AGENTROUTER RAW RESP:", res.statusCode, data);
+        console.log("0G LABS RAW RESP:", res.statusCode, data);
         resolvePromise({
           ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
           status: res.statusCode || 0,
