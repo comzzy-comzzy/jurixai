@@ -31,11 +31,12 @@ export const Route = createFileRoute("/playground")({
 type AgentEvaluation = {
   agent: string;
   role: string;
-  score: number;
+  score: number | null;
   confidence: number;
   rationale: string;
   evidence: string[];
   flags: string[];
+  locked?: boolean;
 };
 
 type AnalysisResult = {
@@ -148,7 +149,7 @@ function Playground() {
 
       result.evaluations?.forEach((ev) => {
         content += `### ${ev.agent} (${ev.role})\n`;
-        content += `- **Score:** ${ev.score} / 10\n`;
+        content += `- **Score:** ${ev.score !== null ? `${ev.score} / 10` : "Locked"}\n`;
         content += `- **Confidence:** ${(ev.confidence * 100).toFixed(0)}%\n\n`;
         content += `#### Rationale:\n${ev.rationale}\n\n`;
 
@@ -185,7 +186,7 @@ function Playground() {
 
         repo.evaluations.forEach((ev) => {
           content += `#### ${ev.agent} (${ev.role})\n`;
-          content += `- **Score:** ${ev.score} / 10\n\n`;
+          content += `- **Score:** ${ev.score !== null ? `${ev.score} / 10` : "Locked"}\n\n`;
           content += `##### Rationale:\n${ev.rationale}\n\n`;
           content += `---\n\n`;
         });
@@ -890,7 +891,7 @@ function Playground() {
                               <span
                                 className={`text-xs font-mono font-bold px-2 py-1 rounded border ${agentColor}`}
                               >
-                                {ev.score} / 10
+                                {ev.score !== null ? `${ev.score} / 10` : "Locked"}
                               </span>
                             </div>
                             <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3 mb-4">
@@ -1028,7 +1029,7 @@ function Playground() {
                                       <span
                                         className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${agentColor}`}
                                       >
-                                        {ev.score} / 10
+                                        {ev.score !== null ? `${ev.score} / 10` : "Locked"}
                                       </span>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3 mb-3">

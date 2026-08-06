@@ -93,11 +93,12 @@ function generateTextReport(
     evaluations: Array<{
       agent: string;
       role: string;
-      score: number;
+      score: number | null;
       confidence: number;
       rationale: string;
       evidence: string[];
       flags: string[];
+      locked?: boolean;
     }>;
     averageScore: number;
   }>,
@@ -121,7 +122,7 @@ function generateTextReport(
 
     repo.evaluations.forEach((ev) => {
       content += `🤖 Agent: ${ev.agent} (${ev.role})\n`;
-      content += `   Score: ${ev.score} / 10\n`;
+      content += `   Score: ${ev.score !== null ? ev.score + " / 10" : "Locked (Sandbox Mode)"}\n`;
       content += `   Confidence: ${(ev.confidence * 100).toFixed(0)}%\n`;
       content += `   Rationale: ${ev.rationale}\n`;
       
@@ -177,12 +178,14 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const repoKeys = [
       "githubUrl",
       "github_url",
+      "githubRepositoryUrl",
+      "github_repository_url",
+      "repository_url",
+      "repositoryUrl",
       "repoUrl",
       "repo_url",
       "url",
       "repository",
-      "repositoryUrl",
-      "repository_url",
       "repo",
       "git",
       "gitUrl",
@@ -221,6 +224,9 @@ const handleJudge = async ({ request }: { request: Request }) => {
     }
 
     const descKeys = [
+      "projectDescription",
+      "project_description",
+      "project",
       "taskDescription",
       "task_description",
       "task",
@@ -596,8 +602,27 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     // Validate repository count and project description AFTER payment is confirmed, but BEFORE starting evaluations.
     if (urlsToAudit.length === 0) {
+      const isGet = request.method.toUpperCase() === "GET";
+      const hasQueryParams = url.searchParams.size > 0;
+      if (isGet && !hasQueryParams) {
+        return Response.json({
+          ok: true,
+          message: "Hello! I am JuriXAI Auditor (Agent ID #4964), your autonomous multi-agent repository quality auditor.\n\n" +
+            "I can audit any public GitHub repository under 4 dimensions:\n" +
+            "1. Code Quality & Implementation (Agent Vex)\n" +
+            "2. Product Design & UX (Agent Kael)\n" +
+            "3. Innovation & Originality (Agent Oryn)\n" +
+            "4. Completeness & Execution (Agent Zera)\n\n" +
+            "To trigger an audit, please provide a public GitHub URL and a brief description of your project.\n" +
+            "Example request: { \"githubUrl\": \"https://github.com/owner/repo\", \"description\": \"My project description\" }.\n\n" +
+            "Note: Free evaluations are available by adding the `sandbox=true` parameter or key.",
+        });
+      }
       return Response.json(
-        { ok: false, error: "No valid repository URL provided." },
+        {
+          ok: false,
+          error: "No valid repository URL provided. Please provide a public GitHub repository URL using the 'githubUrl' parameter.",
+        },
         { status: 400 },
       );
     }
@@ -740,11 +765,12 @@ const handleJudge = async ({ request }: { request: Request }) => {
       const evaluations: Array<{
         agent: string;
         role: string;
-        score: number;
+        score: number | null;
         confidence: number;
         rationale: string;
         evidence: string[];
         flags: string[];
+        locked?: boolean;
       }> = [];
 
       for (const agent of filteredAgents) {
@@ -770,11 +796,12 @@ const handleJudge = async ({ request }: { request: Request }) => {
           evaluations.push({
             agent: agent.name,
             role: agent.role,
-            score: 0,
+            score: null,
             confidence: 0,
             rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 1 USDT to unlock the full 4-agent suite.`,
             evidence: [],
             flags: ["LOCKED_SANDBOX"],
+            locked: true,
           });
           continue;
         }
@@ -806,7 +833,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       let totalWeight = 0;
       let weightedSum = 0;
       evaluations.forEach((ev) => {
-        if (sandbox && ev.score === 0) return; // Ignore locked agents in average score
+        if (ev.score === null) return; // Ignore locked agents in average score
         const agent = agents.find((a) => a.name === ev.agent);
         const weight = agent ? agent.weight_percent : 25;
         weightedSum += ev.score * weight;
