@@ -15,11 +15,13 @@ export type AgentEvaluation = {
 };
 
 type JudgeModelConfig = {
-  provider: "openai" | "minimax" | "openai_compat";
+  provider: "openai_compat";
   apiKey: string;
   model: string;
   baseUrl: string;
 };
+
+const ZERO_G_JUDGE_BASE_URL = "https://router-api.0g.ai/v1";
 
 type RepoContext = {
   summary: string;
@@ -859,24 +861,25 @@ export async function probeJudgeModel(): Promise<{
 }
 
 function getJudgeModelConfig(): JudgeModelConfig {
-  const rawProvider = process.env.JURIX_JUDGE_PROVIDER?.trim().toLowerCase();
-  const provider =
-    rawProvider === "minimax"
-      ? "minimax"
-      : rawProvider === "openai_compat"
-        ? "openai_compat"
-        : "openai";
+  const configuredProvider = process.env.JURIX_JUDGE_PROVIDER?.trim().toLowerCase();
+  if (configuredProvider && configuredProvider !== "openai_compat") {
+    throw new Error(
+      "JURIX_JUDGE_PROVIDER must be openai_compat because JuriXAI judging is pinned to 0G Labs.",
+    );
+  }
+
+  const configuredBaseUrl = process.env.JURIX_JUDGE_BASE_URL?.trim().replace(/\/$/, "");
+  if (configuredBaseUrl && configuredBaseUrl !== ZERO_G_JUDGE_BASE_URL) {
+    throw new Error(
+      `JURIX_JUDGE_BASE_URL must be ${ZERO_G_JUDGE_BASE_URL} because JuriXAI judging is pinned to 0G Labs.`,
+    );
+  }
+
   return {
-    provider,
+    provider: "openai_compat",
     apiKey: required("JURIX_JUDGE_API_KEY"),
     model: required("JURIX_JUDGE_MODEL"),
-    baseUrl:
-      process.env.JURIX_JUDGE_BASE_URL?.trim() ||
-      (provider === "minimax"
-        ? "https://api.minimaxi.chat/v1"
-        : provider === "openai_compat"
-          ? "https://router-api.0g.ai/v1"
-          : "https://api.openai.com/v1"),
+    baseUrl: ZERO_G_JUDGE_BASE_URL,
   };
 }
 
@@ -1152,10 +1155,10 @@ async function requestJudgeModel(
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(postData),
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "User-Agent": "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464",
-        "Originator": "codex_cli_rs",
-        "Version": "0.101.0",
+        Originator: "codex_cli_rs",
+        Version: "0.101.0",
         "Bypass-Tunnel-Reminder": "true",
       },
       timeout: 120000,
@@ -1211,9 +1214,7 @@ function validateEvaluation(raw: string): AgentEvaluation {
   const score = clamp(Number(text.match(/\bSCORE\s*:\s*([^\n]+)/i)?.[1]), 1, 10);
   const confidence = clamp(Number(text.match(/\bCONFIDENCE\s*:\s*([^\n]+)/i)?.[1]), 0, 1);
   const rationale = text.match(/\bRATIONALE\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
-  const evidence = normalizeStringArray(
-    text.match(/\bEVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "",
-  );
+  const evidence = normalizeStringArray(text.match(/\bEVIDENCE\s*:\s*([^\n]+)/i)?.[1] ?? "");
   const flagsRaw = text.match(/\bFLAGS\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
   const flags = !flagsRaw || /^none$/i.test(flagsRaw) ? [] : normalizeStringArray(flagsRaw);
 
@@ -1392,63 +1393,76 @@ export async function evaluateSubmissionWithModel(
   let lastError = "Judge model returned an empty response.";
   let finalEvaluation: AgentEvaluation | null = null;
 
-  for (const body of requestBodies) {
-    const result = await requestJudgeModel(finalEndpoint, config.apiKey, body);
-    if (!result.ok) {
-      lastError = `Judge model request failed (${result.status}): ${result.bodyText.slice(0, 400)}`;
-      continue;
-    }
-
-    const payload = (result.json ?? {}) as Record<string, unknown>;
-    const raw =
-      extractTextFromUnknown(payload["output_text"]) ||
-      extractTextFromUnknown(payload["reply"]) ||
-      extractTextFromUnknown(payload["text"]) ||
-      extractChoiceText(Array.isArray(payload["choices"]) ? payload["choices"][0] : null) ||
-      extractTextFromUnknown((payload["output"] as unknown[])?.[0]) ||
-      extractTextFromUnknown(payload);
-
-    if (!raw) {
-      lastError = "Judge model returned an empty response.";
-      continue;
-    }
-
-    if (raw.trim().startsWith("{")) {
-      try {
-        const parsed = JSON.parse(raw) as Partial<AgentEvaluation>;
-        if (
-          typeof parsed.score === "number" &&
-          typeof parsed.confidence === "number" &&
-          typeof parsed.rationale === "string"
-        ) {
-          finalEvaluation = {
-            score: Number(clamp(parsed.score, 1, 10).toFixed(2)),
-            confidence: Number(clamp(parsed.confidence, 0, 1).toFixed(2)),
-            rationale: parsed.rationale.trim(),
-            evidence: Array.isArray(parsed.evidence)
-              ? parsed.evidence.map(String).filter(Boolean).slice(0, 6)
-              : [],
-            flags: Array.isArray(parsed.flags)
-              ? parsed.flags.map(String).filter(Boolean).slice(0, 6)
-              : [],
-          };
-          break;
+  requestLoop: for (const body of requestBodies) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const result = await requestJudgeModel(finalEndpoint, config.apiKey, body);
+      if (!result.ok) {
+        lastError = `Judge model request failed (${result.status}): ${result.bodyText.slice(0, 400)}`;
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
         }
-      } catch {
-        // Fall through to line-based validation.
+        continue;
       }
-    }
 
-    try {
-      finalEvaluation = validateEvaluation(raw);
-      break;
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e);
+      const payload = (result.json ?? {}) as Record<string, unknown>;
+      const raw =
+        extractTextFromUnknown(payload["output_text"]) ||
+        extractTextFromUnknown(payload["reply"]) ||
+        extractTextFromUnknown(payload["text"]) ||
+        extractChoiceText(Array.isArray(payload["choices"]) ? payload["choices"][0] : null) ||
+        extractTextFromUnknown((payload["output"] as unknown[])?.[0]) ||
+        extractTextFromUnknown(payload);
+
+      if (!raw) {
+        lastError = "Judge model returned an empty response.";
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
+        }
+        continue;
+      }
+
+      if (raw.trim().startsWith("{")) {
+        try {
+          const parsed = JSON.parse(raw) as Partial<AgentEvaluation>;
+          if (
+            typeof parsed.score === "number" &&
+            typeof parsed.confidence === "number" &&
+            typeof parsed.rationale === "string"
+          ) {
+            finalEvaluation = {
+              score: Number(clamp(parsed.score, 1, 10).toFixed(2)),
+              confidence: Number(clamp(parsed.confidence, 0, 1).toFixed(2)),
+              rationale: parsed.rationale.trim(),
+              evidence: Array.isArray(parsed.evidence)
+                ? parsed.evidence.map(String).filter(Boolean).slice(0, 6)
+                : [],
+              flags: Array.isArray(parsed.flags)
+                ? parsed.flags.map(String).filter(Boolean).slice(0, 6)
+                : [],
+            };
+            break requestLoop;
+          }
+        } catch {
+          // Fall through to line-based validation.
+        }
+      }
+
+      try {
+        finalEvaluation = validateEvaluation(raw);
+        break requestLoop;
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
+        }
+      }
     }
   }
 
   if (!finalEvaluation) {
-    console.warn(`[jurix judge] LLM failed (${lastError}), falling back to deterministic evaluation.`);
+    console.warn(
+      `[jurix judge] LLM failed (${lastError}), falling back to deterministic evaluation.`,
+    );
     finalEvaluation = buildFallbackEvaluation(
       agent,
       criterion,

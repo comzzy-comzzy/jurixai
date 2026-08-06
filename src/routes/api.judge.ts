@@ -100,10 +100,13 @@ function generateTextReport(
       flags: string[];
       locked?: boolean;
     }>;
-    averageScore: number;
+    averageScore: number | null;
+    partialScore: number | null;
+    dimensionsEvaluated: number;
+    totalDimensions: number;
   }>,
   sandbox: boolean,
-  txHash: string
+  txHash: string,
 ): string {
   let content = "";
   content += `======================================================================\n`;
@@ -117,9 +120,13 @@ function generateTextReport(
   batchResults.forEach((repo, idx) => {
     content += `----------------------------------------------------------------------\n`;
     content += `📂 [Repository ${idx + 1}/${batchResults.length}] ${repo.githubUrl}\n`;
-    const evaluatedCount = repo.evaluations.filter(ev => ev.score !== null).length;
-    const totalCount = repo.evaluations.length;
-    content += `Average Score: ${repo.averageScore} / 10 (based on ${evaluatedCount} of ${totalCount} dimensions evaluated)\n`;
+    if (repo.averageScore !== null) {
+      content += `Average Score: ${repo.averageScore} / 10 (based on all ${repo.totalDimensions} dimensions)\n`;
+    } else if (repo.partialScore !== null) {
+      content += `Partial Score: ${repo.partialScore} / 10 (${repo.dimensionsEvaluated} of ${repo.totalDimensions} dimensions evaluated; no average issued)\n`;
+    } else {
+      content += `Average Score: Not available (0 of ${repo.totalDimensions} dimensions evaluated)\n`;
+    }
     content += `----------------------------------------------------------------------\n\n`;
 
     repo.evaluations.forEach((ev) => {
@@ -127,14 +134,14 @@ function generateTextReport(
       content += `   Score: ${ev.score !== null ? ev.score + " / 10" : "Locked (Sandbox Mode)"}\n`;
       content += `   Confidence: ${(ev.confidence * 100).toFixed(0)}%\n`;
       content += `   Rationale: ${ev.rationale}\n`;
-      
+
       if (ev.evidence && ev.evidence.length > 0) {
         content += `   Evidence:\n`;
         ev.evidence.forEach((item) => {
           content += `     - ${item}\n`;
         });
       }
-      
+
       if (ev.flags && ev.flags.length > 0) {
         content += `   Flags:\n`;
         ev.flags.forEach((flag) => {
@@ -407,7 +414,6 @@ const handleJudge = async ({ request }: { request: Request }) => {
     } | null = null;
     let isReplay = false;
 
-
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
       "vex-01": 250n, // 0.00025 USDT (Engineering)
@@ -473,7 +479,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
             description: `JuriXAI Auditor: Modular multi-agent repository quality audit service (Agents: ${targetAgentSlugs.join(", ")}).`,
             amount: expectedMin,
             payTo: JURIX_X402_PAY_TO,
-            errorMessage: "Payment required. Use a standard x402 PAYMENT-SIGNATURE header or provide a valid txHash.",
+            errorMessage:
+              "Payment required. Use a standard x402 PAYMENT-SIGNATURE header or provide a valid txHash.",
           }),
         );
       }
@@ -486,7 +493,9 @@ const handleJudge = async ({ request }: { request: Request }) => {
         .maybeSingle();
 
       if (existingPayment) {
-        const storedRepo = existingPayment.from_address ? normalizeGithubUrl(existingPayment.from_address) : "";
+        const storedRepo = existingPayment.from_address
+          ? normalizeGithubUrl(existingPayment.from_address)
+          : "";
         const currentRepo = normalizeGithubUrl(urlsToAudit[0] || "");
         if (storedRepo && currentRepo && storedRepo === currentRepo) {
           isReplay = true;
@@ -609,21 +618,23 @@ const handleJudge = async ({ request }: { request: Request }) => {
       if (isGet && !hasQueryParams) {
         return Response.json({
           ok: true,
-          message: "Hello! I am JuriXAI Auditor (Agent ID #4964), your autonomous multi-agent repository quality auditor.\n\n" +
+          message:
+            "Hello! I am JuriXAI Auditor (Agent ID #4964), your autonomous multi-agent repository quality auditor.\n\n" +
             "I can audit any public GitHub repository under 4 dimensions:\n" +
             "1. Code Quality & Implementation (Agent Vex)\n" +
             "2. Product Design & UX (Agent Kael)\n" +
             "3. Innovation & Originality (Agent Oryn)\n" +
             "4. Completeness & Execution (Agent Zera)\n\n" +
             "To trigger an audit, please provide a public GitHub URL and a brief description of your project.\n" +
-            "Example request: { \"githubUrl\": \"https://github.com/owner/repo\", \"description\": \"My project description\" }.\n\n" +
+            'Example request: { "githubUrl": "https://github.com/owner/repo", "description": "My project description" }.\n\n' +
             "Note: Free evaluations are available by adding the `sandbox=true` parameter or key.",
         });
       }
       return Response.json(
         {
           ok: false,
-          error: "No valid repository URL provided. Please provide a public GitHub repository URL using the 'githubUrl' parameter.",
+          error:
+            "No valid repository URL provided. Please provide a public GitHub repository URL using the 'githubUrl' parameter.",
         },
         { status: 400 },
       );
@@ -831,7 +842,8 @@ const handleJudge = async ({ request }: { request: Request }) => {
         }
       }
 
-      // Calculate average score
+      // Calculate a provisional score from completed dimensions. A public
+      // average is only issued when all four advertised dimensions are scored.
       let totalWeight = 0;
       let weightedSum = 0;
       evaluations.forEach((ev) => {
@@ -842,15 +854,23 @@ const handleJudge = async ({ request }: { request: Request }) => {
         totalWeight += weight;
       });
 
-      const averageScore = Number((weightedSum / (totalWeight || 1)).toFixed(2));
-
-      const evaluatedCount = evaluations.filter(ev => ev.score !== null).length;
-      const totalCount = evaluations.length;
+      const evaluatedCount = evaluations.filter((ev) => ev.score !== null).length;
+      const totalCount = defaultSlugs.length;
+      const partialScore =
+        evaluatedCount > 0 ? Number((weightedSum / totalWeight).toFixed(2)) : null;
+      const hasAllDimensions = evaluations.length === totalCount && evaluatedCount === totalCount;
+      const hasFallback = evaluations.some(
+        (evaluation) =>
+          evaluation.flags.includes("fallback_scoring") ||
+          evaluation.evidence.some((item) => item.startsWith("model_error:")),
+      );
+      const averageScore = hasAllDimensions && !hasFallback ? partialScore : null;
 
       batchResults.push({
         githubUrl: currentUrl,
         evaluations,
         averageScore,
+        partialScore,
         dimensionsEvaluated: evaluatedCount,
         totalDimensions: totalCount,
       });
@@ -860,6 +880,33 @@ const handleJudge = async ({ request }: { request: Request }) => {
       return Response.json(
         { ok: false, error: "Audit pipeline yielded no results." },
         { status: 500 },
+      );
+    }
+
+    const fallbackEvaluations = batchResults.flatMap((result) =>
+      result.evaluations.filter(
+        (evaluation) =>
+          evaluation.flags.includes("fallback_scoring") ||
+          evaluation.evidence.some((item) => item.startsWith("model_error:")),
+      ),
+    );
+
+    if (!sandbox && fallbackEvaluations.length > 0) {
+      const paymentSettled = Boolean(txHash && !okxVerified);
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "The 0G Labs judging engine did not complete every requested evaluation. No fallback audit report was issued; retry this request with the same payment details.",
+          retryable: true,
+          paymentSettled,
+          paymentAction: paymentSettled
+            ? "Reuse the same txHash; no additional payment is required."
+            : "The x402 payment was not settled; retry with the same payment authorization.",
+          evaluationEngine: "0g_labs",
+          failedAgents: [...new Set(fallbackEvaluations.map((evaluation) => evaluation.agent))],
+        },
+        { status: 503, headers: { "Retry-After": "5" } },
       );
     }
 
@@ -894,7 +941,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const reportText = generateTextReport(
       batchResults,
       sandbox,
-      txHash || (sandbox ? "sandbox_mode" : "x402_settled")
+      txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
     );
 
     // Print the report directly to the server terminal console
@@ -907,11 +954,16 @@ const handleJudge = async ({ request }: { request: Request }) => {
         txHash: txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
         evaluations: isSingle ? batchResults[0]?.evaluations : undefined,
         averageScore: isSingle ? batchResults[0]?.averageScore : undefined,
+        partialScore: isSingle ? batchResults[0]?.partialScore : undefined,
         dimensionsEvaluated: isSingle ? batchResults[0]?.dimensionsEvaluated : undefined,
         totalDimensions: isSingle ? batchResults[0]?.totalDimensions : undefined,
         averageScoreBasis: isSingle
-          ? `${batchResults[0]?.evaluations.filter((ev: any) => ev.score !== null).length} of ${batchResults[0]?.evaluations.length} dimensions evaluated`
+          ? batchResults[0]?.averageScore !== null
+            ? `all ${batchResults[0]?.totalDimensions} dimensions evaluated`
+            : `not issued; ${batchResults[0]?.dimensionsEvaluated} of ${batchResults[0]?.totalDimensions} dimensions evaluated`
           : undefined,
+        evaluationEngine: "0g_labs",
+        fallbackUsed: false,
         results: batchResults, // ALWAYS return the full results array
         repoCount,
         report: reportText, // Send the report on their terminal too

@@ -44,11 +44,18 @@ type AnalysisResult = {
   githubUrl?: string;
   txHash: string;
   evaluations?: AgentEvaluation[];
-  averageScore?: number;
+  averageScore?: number | null;
+  partialScore?: number | null;
+  dimensionsEvaluated?: number;
+  totalDimensions?: number;
+  averageScoreBasis?: string;
   results?: Array<{
     githubUrl: string;
     evaluations: AgentEvaluation[];
-    averageScore: number;
+    averageScore: number | null;
+    partialScore: number | null;
+    dimensionsEvaluated: number;
+    totalDimensions: number;
   }>;
   repoCount?: number;
 };
@@ -72,7 +79,12 @@ function Playground() {
   const [isCopied, setIsCopied] = useState(false);
   const [isAmountCopied, setIsAmountCopied] = useState(false);
 
-  const [selectedAgentSlugs, setSelectedAgentSlugs] = useState<string[]>(["vex-01", "kael-02", "oryn-03", "zera-04"]);
+  const [selectedAgentSlugs, setSelectedAgentSlugs] = useState<string[]>([
+    "vex-01",
+    "kael-02",
+    "oryn-03",
+    "zera-04",
+  ]);
   const AGENTS_PRICING: Record<string, number> = {
     "vex-01": 0.25,
     "kael-02": 0.25,
@@ -144,7 +156,11 @@ function Playground() {
       if (result.txHash && result.txHash !== "sandbox_mode") {
         content += `- **Transaction Hash:** ${result.txHash}\n`;
       }
-      content += `- **Average Score:** ${result.averageScore} / 10\n\n`;
+      if (result.averageScore !== null && result.averageScore !== undefined) {
+        content += `- **Average Score:** ${result.averageScore} / 10\n\n`;
+      } else {
+        content += `- **Partial Score:** ${result.partialScore ?? "N/A"} / 10 (${result.dimensionsEvaluated ?? 0} of ${result.totalDimensions ?? 4} dimensions; no average issued)\n\n`;
+      }
       content += `## Agent Evaluations\n\n`;
 
       result.evaluations?.forEach((ev) => {
@@ -181,7 +197,11 @@ function Playground() {
 
       result.results?.forEach((repo) => {
         content += `## Repository: ${repo.githubUrl}\n`;
-        content += `- **Average Score:** ${repo.averageScore} / 10\n\n`;
+        if (repo.averageScore !== null) {
+          content += `- **Average Score:** ${repo.averageScore} / 10\n\n`;
+        } else {
+          content += `- **Partial Score:** ${repo.partialScore ?? "N/A"} / 10 (${repo.dimensionsEvaluated} of ${repo.totalDimensions} dimensions; no average issued)\n\n`;
+        }
         content += `### Evaluations:\n\n`;
 
         repo.evaluations.forEach((ev) => {
@@ -491,7 +511,14 @@ function Playground() {
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(AGENTS_PRICING).map(([slug, price]) => {
-                    const agentName = slug === "vex-01" ? "Vex (Engineering)" : slug === "kael-02" ? "Kael (Product)" : slug === "oryn-03" ? "Oryn (Innovation)" : "Zera (Completeness)";
+                    const agentName =
+                      slug === "vex-01"
+                        ? "Vex (Engineering)"
+                        : slug === "kael-02"
+                          ? "Kael (Product)"
+                          : slug === "oryn-03"
+                            ? "Oryn (Innovation)"
+                            : "Zera (Completeness)";
                     const isSelected = selectedAgentSlugs.includes(slug);
                     return (
                       <button
@@ -500,7 +527,7 @@ function Playground() {
                         onClick={() => {
                           if (isSelected) {
                             if (selectedAgentSlugs.length > 1) {
-                              setSelectedAgentSlugs(selectedAgentSlugs.filter(s => s !== slug));
+                              setSelectedAgentSlugs(selectedAgentSlugs.filter((s) => s !== slug));
                             } else {
                               toast.error("At least one agent must be selected.");
                             }
@@ -515,7 +542,9 @@ function Playground() {
                         }`}
                       >
                         <span className="font-bold block truncate">{agentName}</span>
-                        <span className="text-[10px] font-mono opacity-85">{price.toFixed(3)} USDT</span>
+                        <span className="text-[10px] font-mono opacity-85">
+                          {price.toFixed(3)} USDT
+                        </span>
                       </button>
                     );
                   })}
@@ -759,8 +788,12 @@ function Playground() {
                     </div>
                     <div className="text-right shrink-0">
                       <span className="text-[10px] font-bold text-accent block">
-                        {item.result.averageScore || item.result.results?.[0]?.averageScore || 0} /
-                        10
+                        {item.result.averageScore ??
+                          item.result.partialScore ??
+                          item.result.results?.[0]?.averageScore ??
+                          item.result.results?.[0]?.partialScore ??
+                          0}{" "}
+                        / 10
                       </span>
                       <span className="text-[8px] text-muted-foreground block mt-0.5">
                         {new Date(item.timestamp).toLocaleDateString()}
@@ -854,10 +887,12 @@ function Playground() {
 
                       <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-accent/20 bg-accent/5">
                         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          Avg Score
+                          {result.averageScore !== null && result.averageScore !== undefined
+                            ? "Avg Score"
+                            : "Partial Score"}
                         </span>
                         <span className="text-2xl font-bold text-accent italic mt-0.5">
-                          {result.averageScore}{" "}
+                          {result.averageScore ?? result.partialScore ?? "N/A"}{" "}
                           <span className="text-xs text-muted-foreground">/10</span>
                         </span>
                       </div>
@@ -988,7 +1023,10 @@ function Playground() {
 
                           <div className="flex items-center gap-4">
                             <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded border border-accent/20 bg-accent/5 italic">
-                              {repo.averageScore} / 10
+                              {repo.averageScore !== null
+                                ? `${repo.averageScore} avg`
+                                : `${repo.partialScore ?? "N/A"} partial`}{" "}
+                              / 10
                             </span>
                             <button
                               type="button"
