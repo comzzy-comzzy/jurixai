@@ -408,10 +408,10 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
     // Define pricing standard for individual agents (USDT, decimals=6)
     const AGENTS_PRICING: Record<string, bigint> = {
-      "vex-01": 250000n, // 0.25 USDT (Engineering)
-      "kael-02": 250000n, // 0.25 USDT (Product/UX)
-      "oryn-03": 250000n, // 0.25 USDT (Innovation)
-      "zera-04": 250000n, // 0.25 USDT (Completeness/Docs)
+      "vex-01": 250n, // 0.00025 USDT (Engineering)
+      "kael-02": 250n, // 0.00025 USDT (Product/UX)
+      "oryn-03": 250n, // 0.00025 USDT (Innovation)
+      "zera-04": 250n, // 0.00025 USDT (Completeness/Docs)
     };
 
     // Default to all active agents if not provided or empty
