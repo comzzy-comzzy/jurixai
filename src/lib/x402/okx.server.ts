@@ -22,7 +22,7 @@ import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
 
 export const XLAYER_NETWORK = "eip155:196" as const;
 export const USDT0_ASSET = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
-export const USDT0_EXTRA = { name: "USDT", symbol: "USDT", decimals: 6, version: "1" };
+export const USDT0_EXTRA = { name: "USD\u20AE0", symbol: "USD\u20AE0", decimals: 6, version: "1" };
 
 /** Per-agent pricing in USDT0 minimum units (6 decimals). */
 export const AGENTS_PRICING: Record<string, bigint> = {
