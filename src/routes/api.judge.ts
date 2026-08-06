@@ -117,7 +117,9 @@ function generateTextReport(
   batchResults.forEach((repo, idx) => {
     content += `----------------------------------------------------------------------\n`;
     content += `📂 [Repository ${idx + 1}/${batchResults.length}] ${repo.githubUrl}\n`;
-    content += `Average Score: ${repo.averageScore} / 10\n`;
+    const evaluatedCount = repo.evaluations.filter(ev => ev.score !== null).length;
+    const totalCount = repo.evaluations.length;
+    content += `Average Score: ${repo.averageScore} / 10 (based on ${evaluatedCount} of ${totalCount} dimensions evaluated)\n`;
     content += `----------------------------------------------------------------------\n\n`;
 
     repo.evaluations.forEach((ev) => {
@@ -792,13 +794,13 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
         // In sandbox mode, lock non-Vex agents to enforce payment upgrade
         if (sandbox && agent.slug !== "vex-01") {
-          const individualCost = Number(AGENTS_PRICING[agent.slug] || 250000n) / 1000000;
+          const individualCost = Number(AGENTS_PRICING[agent.slug] || 250n) / 1000000;
           evaluations.push({
             agent: agent.name,
             role: agent.role,
             score: null,
             confidence: 0,
-            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 1 USDT to unlock the full 4-agent suite.`,
+            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 0.001 USDT to unlock the full 4-agent suite.`,
             evidence: [],
             flags: ["LOCKED_SANDBOX"],
             locked: true,
@@ -842,10 +844,15 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
       const averageScore = Number((weightedSum / (totalWeight || 1)).toFixed(2));
 
+      const evaluatedCount = evaluations.filter(ev => ev.score !== null).length;
+      const totalCount = evaluations.length;
+
       batchResults.push({
         githubUrl: currentUrl,
         evaluations,
         averageScore,
+        dimensionsEvaluated: evaluatedCount,
+        totalDimensions: totalCount,
       });
     }
 
@@ -900,6 +907,11 @@ const handleJudge = async ({ request }: { request: Request }) => {
         txHash: txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
         evaluations: isSingle ? batchResults[0]?.evaluations : undefined,
         averageScore: isSingle ? batchResults[0]?.averageScore : undefined,
+        dimensionsEvaluated: isSingle ? batchResults[0]?.dimensionsEvaluated : undefined,
+        totalDimensions: isSingle ? batchResults[0]?.totalDimensions : undefined,
+        averageScoreBasis: isSingle
+          ? `${batchResults[0]?.evaluations.filter((ev: any) => ev.score !== null).length} of ${batchResults[0]?.evaluations.length} dimensions evaluated`
+          : undefined,
         results: batchResults, // ALWAYS return the full results array
         repoCount,
         report: reportText, // Send the report on their terminal too

@@ -1448,8 +1448,15 @@ export async function evaluateSubmissionWithModel(
   }
 
   if (!finalEvaluation) {
-    throw new Error(
-      `JuriXAI judging engine failed because the AI model is currently unreachable or timed out. Please try again later. Details: ${lastError}`
+    console.warn(`[jurix judge] LLM failed (${lastError}), falling back to deterministic evaluation.`);
+    finalEvaluation = buildFallbackEvaluation(
+      agent,
+      criterion,
+      hackathon,
+      submission,
+      repoContext,
+      lastError,
+      options,
     );
   }
 
