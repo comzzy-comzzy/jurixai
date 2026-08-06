@@ -9,7 +9,14 @@ import {
   instructionsToResponse,
   type OkxPaymentResult,
 } from "@/lib/x402/okx.server";
+import { resolveX402PaymentHeader } from "@/lib/x402/payment-header";
 import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
+import {
+  createX402PaymentKey,
+  createX402RequestFingerprint,
+  parseX402ReplayRecord,
+  serializeX402ReplayRecord,
+} from "@/lib/x402/replay-cache";
 import type {
   JudgeAgent,
   JudgingCriterion,
@@ -451,6 +458,69 @@ const handleJudge = async ({ request }: { request: Request }) => {
     );
     const expectedMin = feePerRepo * BigInt(repoCount);
     const supabase = getSupabaseServerClient();
+    const paymentSignature = resolveX402PaymentHeader(request.headers);
+    const x402PaymentKey = paymentSignature ? createX402PaymentKey(paymentSignature) : null;
+    const x402RequestFingerprint = paymentSignature
+      ? createX402RequestFingerprint({
+          repositories: urlsToAudit.map(normalizeGithubUrl),
+          agentSlugs: [...targetAgentSlugs].sort(),
+          description: description.trim(),
+          hackathonBrief: hackathonBrief?.trim() || null,
+          hackathonName: hackathonName?.trim() || null,
+        })
+      : null;
+
+    if (!sandbox && !txHash && x402PaymentKey && x402RequestFingerprint) {
+      const { data: cachedPayment, error: cachedPaymentError } = await supabase
+        .from("payments")
+        .select("from_address, to_address")
+        .eq("circle_tx_id", x402PaymentKey)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cachedPaymentError) {
+        console.error("[api/judge] Failed to check x402 replay cache:", cachedPaymentError);
+      } else if (cachedPayment) {
+        if (cachedPayment.from_address !== x402RequestFingerprint) {
+          return Response.json(
+            {
+              ok: false,
+              error:
+                "This x402 payment authorization has already been used for a different audit request.",
+            },
+            { status: 409, headers: { "Cache-Control": "no-store" } },
+          );
+        }
+
+        const replayRecord = parseX402ReplayRecord(cachedPayment.to_address);
+        if (!replayRecord || replayRecord.requestFingerprint !== x402RequestFingerprint) {
+          return Response.json(
+            {
+              ok: false,
+              error: "The cached result for this x402 payment is unavailable or invalid.",
+              retryable: false,
+            },
+            { status: 409, headers: { "Cache-Control": "no-store" } },
+          );
+        }
+
+        return Response.json(
+          {
+            ...replayRecord.response,
+            replayed: true,
+            txHash: replayRecord.transaction ?? replayRecord.response.txHash,
+          },
+          {
+            headers: {
+              ...replayRecord.settlementHeaders,
+              "Cache-Control": "private, no-store",
+              "X-JuriXAI-Replay": "true",
+            },
+          },
+        );
+      }
+    }
 
     // 1a. Standard x402 flow via the OKX Payment SDK (facilitator verify/settle).
     // Runs whenever the caller did not supply a legacy on-chain txHash.
@@ -804,7 +874,9 @@ const handleJudge = async ({ request }: { request: Request }) => {
 
       const evaluationResults = await Promise.all(
         filteredAgents.map(async (agent) => {
-          const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
+          const criteriaData = AGENT_CRITERIA_MAP[
+            agent.slug as keyof typeof AGENT_CRITERIA_MAP
+          ] || {
             name: `${agent.name} Evaluation`,
             description: agent.focus_area,
           };
@@ -856,7 +928,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
             console.error(`[api/judge] Agent ${agent.name} evaluation failed:`, err);
             throw err;
           }
-        })
+        }),
       );
       evaluations.push(...evaluationResults);
 
@@ -961,33 +1033,54 @@ const handleJudge = async ({ request }: { request: Request }) => {
       sandbox,
       txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
     );
+    const responseBody = {
+      ok: true,
+      githubUrl: isSingle ? urlsToAudit[0] : undefined,
+      txHash: txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
+      evaluations: isSingle ? batchResults[0]?.evaluations : undefined,
+      averageScore: isSingle ? batchResults[0]?.averageScore : undefined,
+      partialScore: isSingle ? batchResults[0]?.partialScore : undefined,
+      dimensionsEvaluated: isSingle ? batchResults[0]?.dimensionsEvaluated : undefined,
+      totalDimensions: isSingle ? batchResults[0]?.totalDimensions : undefined,
+      averageScoreBasis: isSingle
+        ? batchResults[0]?.averageScore !== null
+          ? `all ${batchResults[0]?.totalDimensions} dimensions evaluated`
+          : `not issued; ${batchResults[0]?.dimensionsEvaluated} of ${batchResults[0]?.totalDimensions} dimensions evaluated`
+        : undefined,
+      evaluationEngine: "0g_labs",
+      fallbackUsed: false,
+      results: batchResults,
+      repoCount,
+      report: reportText,
+    };
+
+    if (okxVerified && x402PaymentKey && x402RequestFingerprint) {
+      const replayRecord = serializeX402ReplayRecord({
+        version: 1,
+        type: "jurixai-x402-audit",
+        requestFingerprint: x402RequestFingerprint,
+        transaction: txHash || null,
+        response: responseBody,
+        settlementHeaders,
+      });
+      const { error: replayCacheError } = await supabase.from("payments").insert({
+        kind: "entry",
+        from_address: x402RequestFingerprint,
+        to_address: replayRecord,
+        amount_usdc: Number(expectedMin) / 1000000,
+        circle_tx_id: x402PaymentKey,
+        status: "confirmed",
+      });
+
+      if (replayCacheError) {
+        console.error("[api/judge] Failed to store x402 replay cache:", replayCacheError);
+      }
+    }
 
     // Print the report directly to the server terminal console
     console.log("\n" + reportText + "\n");
 
-    return Response.json(
-      {
-        ok: true,
-        githubUrl: isSingle ? urlsToAudit[0] : undefined,
-        txHash: txHash || (sandbox ? "sandbox_mode" : "x402_settled"),
-        evaluations: isSingle ? batchResults[0]?.evaluations : undefined,
-        averageScore: isSingle ? batchResults[0]?.averageScore : undefined,
-        partialScore: isSingle ? batchResults[0]?.partialScore : undefined,
-        dimensionsEvaluated: isSingle ? batchResults[0]?.dimensionsEvaluated : undefined,
-        totalDimensions: isSingle ? batchResults[0]?.totalDimensions : undefined,
-        averageScoreBasis: isSingle
-          ? batchResults[0]?.averageScore !== null
-            ? `all ${batchResults[0]?.totalDimensions} dimensions evaluated`
-            : `not issued; ${batchResults[0]?.dimensionsEvaluated} of ${batchResults[0]?.totalDimensions} dimensions evaluated`
-          : undefined,
-        evaluationEngine: "0g_labs",
-        fallbackUsed: false,
-        results: batchResults, // ALWAYS return the full results array
-        repoCount,
-        report: reportText, // Send the report on their terminal too
-      },
-      { headers: settlementHeaders },
-    );
+    return Response.json(responseBody, { headers: settlementHeaders });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "Judging evaluation failed." },

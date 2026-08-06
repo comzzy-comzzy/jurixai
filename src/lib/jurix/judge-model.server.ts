@@ -15,13 +15,15 @@ export type AgentEvaluation = {
 };
 
 type JudgeModelConfig = {
-  provider: "openai_compat";
+  provider: "openai_compat" | "minimax";
   apiKey: string;
   model: string;
   baseUrl: string;
 };
 
 const ZERO_G_JUDGE_BASE_URL = "https://router-api.0g.ai/v1";
+const JUDGE_MODEL_TIMEOUT_MS = 45_000;
+const JUDGE_MODEL_ATTEMPTS = 1;
 
 type RepoContext = {
   summary: string;
@@ -1161,7 +1163,7 @@ async function requestJudgeModel(
         Version: "0.101.0",
         "Bypass-Tunnel-Reminder": "true",
       },
-      timeout: 120000,
+      timeout: JUDGE_MODEL_TIMEOUT_MS,
     };
 
     const req = https.request(options, (res) => {
@@ -1173,7 +1175,9 @@ async function requestJudgeModel(
         let json: Record<string, unknown> | null = null;
         try {
           json = data ? JSON.parse(data) : null;
-        } catch {}
+        } catch {
+          json = null;
+        }
         console.log("0G LABS RAW RESP:", res.statusCode, data);
         resolvePromise({
           ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
@@ -1394,11 +1398,11 @@ export async function evaluateSubmissionWithModel(
   let finalEvaluation: AgentEvaluation | null = null;
 
   requestLoop: for (const body of requestBodies) {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    for (let attempt = 1; attempt <= JUDGE_MODEL_ATTEMPTS; attempt += 1) {
       const result = await requestJudgeModel(finalEndpoint, config.apiKey, body);
       if (!result.ok) {
         lastError = `Judge model request failed (${result.status}): ${result.bodyText.slice(0, 400)}`;
-        if (attempt < 2) {
+        if (attempt < JUDGE_MODEL_ATTEMPTS) {
           await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
         }
         continue;

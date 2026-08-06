@@ -18,6 +18,7 @@ import type {
   HTTPResponseInstructions,
 } from "@okxweb3/x402-core/http";
 import { ExactEvmScheme } from "@okxweb3/x402-evm/exact/server";
+import { resolveX402PaymentHeader } from "@/lib/x402/payment-header";
 import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
 
 export const XLAYER_NETWORK = "eip155:196" as const;
@@ -109,8 +110,12 @@ export function computeExpectedAmount({ agentSlugs, repoCount }: JudgeRequestPar
 /** Minimal HTTPAdapter over a Fetch API Request with a pre-parsed body. */
 function createRequestAdapter(request: Request, parsedBody: unknown): HTTPAdapter {
   const url = new URL(request.url);
+  const paymentSignature = resolveX402PaymentHeader(request.headers);
   return {
-    getHeader: (name) => request.headers.get(name) ?? undefined,
+    getHeader: (name) =>
+      name.toLowerCase() === "payment-signature"
+        ? paymentSignature
+        : (request.headers.get(name) ?? undefined),
     getMethod: () => request.method.toUpperCase(),
     getPath: () => url.pathname,
     getUrl: () => request.url,
@@ -238,13 +243,7 @@ export async function processOkxPayment(
   });
 
   const adapter = createRequestAdapter(request, parsedBody);
-  const paymentHeader =
-    adapter.getHeader("payment-signature") ??
-    adapter.getHeader("PAYMENT-SIGNATURE") ??
-    adapter.getHeader("x-payment") ??
-    adapter.getHeader("X-PAYMENT") ??
-    adapter.getHeader("authorization") ??
-    adapter.getHeader("Authorization");
+  const paymentHeader = adapter.getHeader("payment-signature");
 
   const context: HTTPRequestContext = {
     adapter,
