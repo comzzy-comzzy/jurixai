@@ -459,10 +459,26 @@ const handleJudge = async ({ request }: { request: Request }) => {
     // - OKX credentials/facilitator unavailable -> fall through to legacy challenge
     let okxPayment: OkxPaymentResult | null = null;
     if (!sandbox && !txHash) {
-      okxPayment = await processOkxPayment(request, body, {
-        agentSlugs: targetAgentSlugs,
-        repoCount,
-      });
+      try {
+        okxPayment = await processOkxPayment(request, body, {
+          agentSlugs: targetAgentSlugs,
+          repoCount,
+        });
+      } catch (error) {
+        console.error("[api/judge] x402 request processing failed:", error);
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "Payment verification service is temporarily unavailable. Retry with the same payment authorization.",
+            retryable: true,
+          },
+          {
+            status: 503,
+            headers: { "Cache-Control": "no-store", "Retry-After": "5" },
+          },
+        );
+      }
       if (okxPayment.type === "payment-error") {
         return instructionsToResponse(okxPayment.response);
       }
@@ -786,61 +802,63 @@ const handleJudge = async ({ request }: { request: Request }) => {
         locked?: boolean;
       }> = [];
 
-      for (const agent of filteredAgents) {
-        const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
-          name: `${agent.name} Evaluation`,
-          description: agent.focus_area,
-        };
+      const evaluationResults = await Promise.all(
+        filteredAgents.map(async (agent) => {
+          const criteriaData = AGENT_CRITERIA_MAP[agent.slug as keyof typeof AGENT_CRITERIA_MAP] || {
+            name: `${agent.name} Evaluation`,
+            description: agent.focus_area,
+          };
 
-        const criterion: JudgingCriterion = {
-          id: agent.id,
-          hackathon_id: "api-judging",
-          agent_id: agent.id,
-          name: criteriaData.name,
-          description: criteriaData.description,
-          weight_percent: agent.weight_percent,
-          sort_order: 0,
-          created_at: new Date().toISOString(),
-        };
+          const criterion: JudgingCriterion = {
+            id: agent.id,
+            hackathon_id: "api-judging",
+            agent_id: agent.id,
+            name: criteriaData.name,
+            description: criteriaData.description,
+            weight_percent: agent.weight_percent,
+            sort_order: 0,
+            created_at: new Date().toISOString(),
+          };
 
-        // In sandbox mode, lock non-Vex agents to enforce payment upgrade
-        if (sandbox && agent.slug !== "vex-01") {
-          const individualCost = Number(AGENTS_PRICING[agent.slug] || 250n) / 1000000;
-          evaluations.push({
-            agent: agent.name,
-            role: agent.role,
-            score: null,
-            confidence: 0,
-            rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 0.001 USDT to unlock the full 4-agent suite.`,
-            evidence: [],
-            flags: ["LOCKED_SANDBOX"],
-            locked: true,
-          });
-          continue;
-        }
+          // In sandbox mode, lock non-Vex agents to enforce payment upgrade
+          if (sandbox && agent.slug !== "vex-01") {
+            const individualCost = Number(AGENTS_PRICING[agent.slug] || 250n) / 1000000;
+            return {
+              agent: agent.name,
+              role: agent.role,
+              score: null,
+              confidence: 0,
+              rationale: `[🔒 Paid Upgrade Required] Detailed ${agent.role.toLowerCase()} audit is locked in Sandbox Mode. Send ${individualCost} USDT to unlock the individual agent evaluation, or 0.001 USDT to unlock the full 4-agent suite.`,
+              evidence: [],
+              flags: ["LOCKED_SANDBOX"],
+              locked: true,
+            };
+          }
 
-        try {
-          const evaluation = await evaluateSubmissionWithModel(
-            agent,
-            criterion,
-            hackathon,
-            submission,
-            { isDirectAudit: true },
-          );
-          evaluations.push({
-            agent: agent.name,
-            role: agent.role,
-            score: evaluation.score,
-            confidence: evaluation.confidence,
-            rationale: evaluation.rationale,
-            evidence: evaluation.evidence,
-            flags: evaluation.flags,
-          });
-        } catch (err) {
-          console.error(`[api/judge] Agent ${agent.name} evaluation failed:`, err);
-          throw err;
-        }
-      }
+          try {
+            const evaluation = await evaluateSubmissionWithModel(
+              agent,
+              criterion,
+              hackathon,
+              submission,
+              { isDirectAudit: true },
+            );
+            return {
+              agent: agent.name,
+              role: agent.role,
+              score: evaluation.score,
+              confidence: evaluation.confidence,
+              rationale: evaluation.rationale,
+              evidence: evaluation.evidence,
+              flags: evaluation.flags,
+            };
+          } catch (err) {
+            console.error(`[api/judge] Agent ${agent.name} evaluation failed:`, err);
+            throw err;
+          }
+        })
+      );
+      evaluations.push(...evaluationResults);
 
       // Calculate a provisional score from completed dimensions. A public
       // average is only issued when all four advertised dimensions are scored.

@@ -23,6 +23,8 @@ import { JURIX_X402_PAY_TO } from "@/lib/x402/payee";
 export const XLAYER_NETWORK = "eip155:196" as const;
 export const USDT0_ASSET = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
 export const USDT0_EXTRA = { name: "USD\u20AE0", symbol: "USD\u20AE0", decimals: 6, version: "1" };
+export const JUDGE_PAYMENT_TIMEOUT_SECONDS = 300;
+const FACILITATOR_REQUEST_TIMEOUT_MS = 15_000;
 
 /** Per-agent pricing in USDT0 minimum units (6 decimals). */
 export const AGENTS_PRICING: Record<string, bigint> = {
@@ -36,6 +38,23 @@ export const DEFAULT_AGENT_SLUGS = ["vex-01", "kael-02", "oryn-03", "zera-04"];
 export interface JudgeRequestParams {
   agentSlugs: string[];
   repoCount: number;
+}
+
+async function withTimeout<Result>(
+  promise: Promise<Result>,
+  timeoutMs: number,
+  message: string,
+): Promise<Result> {
+  let timeoutId: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 export function buildPaymentRequiredResponse(params: {
@@ -59,7 +78,7 @@ export function buildPaymentRequiredResponse(params: {
         asset: USDT0_ASSET,
         amount: params.amount.toString(),
         payTo: params.payTo,
-        maxTimeoutSeconds: 300,
+        maxTimeoutSeconds: JUDGE_PAYMENT_TIMEOUT_SECONDS,
         symbol: "USDT",
         decimals: 6,
         extra: { ...USDT0_EXTRA },
@@ -112,7 +131,7 @@ function buildRouteConfig(params: JudgeRequestParams) {
     network: XLAYER_NETWORK,
     payTo: JURIX_X402_PAY_TO,
     price: { amount, asset: USDT0_ASSET, symbol: "USDT", decimals: 6, extra: { ...USDT0_EXTRA } },
-    maxTimeoutSeconds: 300,
+    maxTimeoutSeconds: JUDGE_PAYMENT_TIMEOUT_SECONDS,
     symbol: "USDT",
     decimals: 6,
   };
@@ -219,14 +238,48 @@ export async function processOkxPayment(
   });
 
   const adapter = createRequestAdapter(request, parsedBody);
+  const paymentHeader =
+    adapter.getHeader("payment-signature") ??
+    adapter.getHeader("PAYMENT-SIGNATURE") ??
+    adapter.getHeader("x-payment") ??
+    adapter.getHeader("X-PAYMENT") ??
+    adapter.getHeader("authorization") ??
+    adapter.getHeader("Authorization");
+
   const context: HTTPRequestContext = {
     adapter,
     path: adapter.getPath(),
     method: adapter.getMethod(),
-    paymentHeader: adapter.getHeader("payment-signature"),
+    paymentHeader,
   };
 
-  const result = await httpServer.processHTTPRequest(context);
+  let result: Awaited<ReturnType<typeof httpServer.processHTTPRequest>>;
+  try {
+    result = await withTimeout(
+      httpServer.processHTTPRequest(context),
+      FACILITATOR_REQUEST_TIMEOUT_MS,
+      "OKX payment verification timed out",
+    );
+  } catch (error) {
+    console.error("[x402] Payment verification request failed:", error);
+    return {
+      type: "payment-error",
+      response: {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Retry-After": "5",
+        },
+        body: {
+          ok: false,
+          error:
+            "Payment verification service is temporarily unavailable. Retry with the same payment authorization.",
+          retryable: true,
+        },
+      },
+    };
+  }
 
   if (result.type === "payment-error") {
     return { type: "payment-error", response: result.response };
@@ -237,12 +290,35 @@ export async function processOkxPayment(
     return {
       type: "payment-verified",
       settle: async () => {
-        const settleResult = await httpServer.processSettlement(
-          paymentPayload,
-          paymentRequirements,
-          declaredExtensions,
-          { request: context },
-        );
+        let settleResult: Awaited<ReturnType<typeof httpServer.processSettlement>>;
+        try {
+          settleResult = await withTimeout(
+            httpServer.processSettlement(paymentPayload, paymentRequirements, declaredExtensions, {
+              request: context,
+            }),
+            FACILITATOR_REQUEST_TIMEOUT_MS,
+            "OKX payment settlement timed out",
+          );
+        } catch (error) {
+          console.error("[x402] Payment settlement request failed:", error);
+          return {
+            success: false,
+            response: {
+              status: 503,
+              headers: {
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+                "Retry-After": "5",
+              },
+              body: {
+                ok: false,
+                error:
+                  "Payment settlement service is temporarily unavailable. Retry with the same payment authorization.",
+                retryable: true,
+              },
+            },
+          };
+        }
         if (settleResult.success) {
           return {
             success: true,
@@ -263,6 +339,7 @@ export async function processOkxPayment(
 /** Convert SDK HTTPResponseInstructions into a Fetch API Response. */
 export function instructionsToResponse(instructions: HTTPResponseInstructions): Response {
   const headers = new Headers(instructions.headers);
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
 
   if (instructions.isHtml) {
     if (!headers.has("Content-Type")) headers.set("Content-Type", "text/html; charset=utf-8");
