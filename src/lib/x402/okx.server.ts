@@ -36,6 +36,44 @@ export const AGENTS_PRICING: Record<string, bigint> = {
 };
 export const DEFAULT_AGENT_SLUGS = ["vex-01", "kael-02", "oryn-03", "zera-04"];
 
+/** Declared so buyers can assemble params before signing a 402 challenge. */
+export const JUDGE_OUTPUT_SCHEMA = {
+  input: {
+    type: "http",
+    method: "POST",
+    bodyType: "json",
+    queryParams: {
+      properties: {
+        githubUrl: { type: "string", description: "Public GitHub repository URL" },
+        description: {
+          type: "string",
+          description: "Project description covering purpose and key features",
+        },
+        agents: {
+          type: "string",
+          description: "Optional comma-separated agent slugs: vex-01,kael-02,oryn-03,zera-04",
+        },
+      },
+      required: ["githubUrl", "description"],
+    },
+    body: {
+      properties: {
+        githubUrl: { type: "string", description: "Public GitHub repository URL" },
+        description: {
+          type: "string",
+          description: "Project description covering purpose and key features",
+        },
+        agents: {
+          type: "array",
+          items: { type: "string", enum: DEFAULT_AGENT_SLUGS },
+          description: "Optional agent slugs. Defaults to all four.",
+        },
+      },
+      required: ["githubUrl", "description"],
+    },
+  },
+} as const;
+
 export interface JudgeRequestParams {
   agentSlugs: string[];
   repoCount: number;
@@ -85,6 +123,7 @@ export function buildPaymentRequiredResponse(params: {
         extra: { ...USDT0_EXTRA },
       },
     ],
+    extensions: { outputSchema: JUDGE_OUTPUT_SCHEMA },
     error: params.errorMessage,
   };
 
@@ -145,6 +184,7 @@ function buildRouteConfig(params: JudgeRequestParams) {
     accepts,
     description,
     mimeType: "application/json",
+    extensions: { outputSchema: JUDGE_OUTPUT_SCHEMA },
     unpaidResponseBody: () => ({
       contentType: "application/json",
       body: {
@@ -152,6 +192,11 @@ function buildRouteConfig(params: JudgeRequestParams) {
         error:
           "Payment required. Retry with a standard x402 PAYMENT-SIGNATURE header (OKX Payment SDK), or pass a txHash of a direct USDT0 transfer, or set sandbox=true for a free preview.",
         x402Version: 2,
+        required: {
+          githubUrl: "Public GitHub repository URL",
+          description: "Project description covering purpose and key features",
+        },
+        outputSchema: JUDGE_OUTPUT_SCHEMA,
       },
     }),
   };

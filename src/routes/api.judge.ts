@@ -162,6 +162,199 @@ function generateTextReport(
   return content;
 }
 
+const VALID_AGENT_SLUGS = ["vex-01", "kael-02", "oryn-03", "zera-04"] as const;
+
+const REQUIRED_AUDIT_PARAMS = {
+  githubUrl:
+    "Public GitHub repository URL string. Example: https://github.com/facebook/react",
+  description:
+    "Non-empty project description explaining the purpose of the codebase and its key features.",
+  agents:
+    "Optional array of agent slugs: vex-01, kael-02, oryn-03, zera-04. Defaults to all four if omitted.",
+} as const;
+
+const AUDIT_PARAM_EXAMPLE = {
+  githubUrl: "https://github.com/facebook/react",
+  description: "A JavaScript library for building user interfaces",
+} as const;
+
+function parameterError(
+  error: string,
+  extras: {
+    missingParams?: string[];
+    invalidParams?: Record<string, string>;
+    status?: number;
+    headers?: HeadersInit;
+  } = {},
+): Response {
+  return Response.json(
+    {
+      ok: false,
+      error,
+      paymentRequired: false,
+      missingParams: extras.missingParams ?? [],
+      invalidParams: extras.invalidParams ?? {},
+      required: REQUIRED_AUDIT_PARAMS,
+      example: AUDIT_PARAM_EXAMPLE,
+    },
+    { status: extras.status ?? 400, headers: extras.headers },
+  );
+}
+
+function mergeNestedToolArguments(body: Record<string, unknown>): Record<string, unknown> {
+  const nestedCandidates: unknown[] = [
+    body.arguments,
+    body.input,
+    (body.params as Record<string, unknown> | undefined)?.arguments,
+    (body.params as Record<string, unknown> | undefined)?.input,
+  ];
+  let merged = { ...body };
+  for (const candidate of nestedCandidates) {
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      merged = { ...(candidate as Record<string, unknown>), ...merged };
+    }
+  }
+  return merged;
+}
+
+function normalizeStringList(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value;
+}
+
+async function validateAuditRequest(params: {
+  githubUrl: string;
+  githubUrls?: unknown;
+  description: string;
+  requestedAgentSlugs?: unknown;
+}): Promise<Response | null> {
+  const { githubUrl, githubUrls, description, requestedAgentSlugs } = params;
+  const missingParams: string[] = [];
+
+  if (requestedAgentSlugs !== undefined && !Array.isArray(requestedAgentSlugs)) {
+    return parameterError("The agents parameter must be an array of valid agent slugs.", {
+      invalidParams: {
+        agents: `Expected an array. Valid slugs: ${VALID_AGENT_SLUGS.join(", ")}`,
+      },
+    });
+  }
+
+  if (
+    Array.isArray(requestedAgentSlugs) &&
+    (requestedAgentSlugs.length === 0 ||
+      requestedAgentSlugs.some(
+        (slug) =>
+          typeof slug !== "string" ||
+          !VALID_AGENT_SLUGS.includes(slug as (typeof VALID_AGENT_SLUGS)[number]),
+      ))
+  ) {
+    return parameterError(
+      `Invalid agents requested. Valid slugs are: ${VALID_AGENT_SLUGS.join(", ")}`,
+      {
+        invalidParams: {
+          agents: `Valid slugs are: ${VALID_AGENT_SLUGS.join(", ")}`,
+        },
+      },
+    );
+  }
+
+  if (
+    githubUrls !== undefined &&
+    (!Array.isArray(githubUrls) || githubUrls.some((value) => typeof value !== "string"))
+  ) {
+    return parameterError(
+      "The githubUrls parameter must be an array of repository URL strings.",
+      {
+        invalidParams: {
+          githubUrls: "Provide an array of public GitHub repository URL strings.",
+        },
+      },
+    );
+  }
+
+  const urlsToAudit = (githubUrl ? [githubUrl] : Array.isArray(githubUrls) ? githubUrls : [])
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (urlsToAudit.length === 0) {
+    missingParams.push("githubUrl");
+  }
+  if (!description.trim()) {
+    missingParams.push("description");
+  }
+  if (missingParams.length > 0) {
+    return parameterError(
+      "Missing required parameters. Complete parameter validation before payment: provide a public GitHub repository URL and a project description. A payment challenge is returned only after these parameters are valid.",
+      { missingParams },
+    );
+  }
+
+  for (const urlToAudit of urlsToAudit) {
+    const repoRef = parseGitHubRepo(urlToAudit);
+    if (!repoRef) {
+      return parameterError(
+        `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.`,
+        {
+          invalidParams: {
+            githubUrl: `${urlToAudit} is not a valid github.com/{owner}/{repo} URL.`,
+          },
+        },
+      );
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`,
+        {
+          headers: {
+            accept: "application/vnd.github+json",
+            "user-agent": "jurixai-judge-bot",
+            ...(process.env.GITHUB_TOKEN?.trim()
+              ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
+              : {}),
+          },
+          signal: AbortSignal.timeout(4000),
+        },
+      );
+      if (!response.ok) {
+        if (response.status === 404) {
+          return parameterError(
+            `GitHub repository is private or does not exist: ${urlToAudit}`,
+            {
+              invalidParams: {
+                githubUrl: `${urlToAudit} is private or does not exist.`,
+              },
+              status: 400,
+            },
+          );
+        }
+        if (response.status === 403 || response.status === 429) {
+          return parameterError(
+            `Unable to validate GitHub repository before payment (status ${response.status}). Retry shortly.`,
+            { status: 503, headers: { "Retry-After": "5" } },
+          );
+        }
+        return parameterError(
+          `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}`,
+          { status: 503, headers: { "Retry-After": "5" } },
+        );
+      }
+    } catch {
+      return parameterError(
+        `Unable to validate GitHub repository before payment: ${urlToAudit}`,
+        { status: 503, headers: { "Retry-After": "5" } },
+      );
+    }
+  }
+
+  return null;
+}
+
 const handleJudge = async ({ request }: { request: Request }) => {
   try {
     console.log("HELLO_WORLD_JUDGE_API_CALLED_URL", request.url);
@@ -173,6 +366,7 @@ const handleJudge = async ({ request }: { request: Request }) => {
       } catch (e) {
         body = {};
       }
+      body = mergeNestedToolArguments(body);
     }
 
     // Check for user prompt or message in common body fields or query params
@@ -223,18 +417,15 @@ const handleJudge = async ({ request }: { request: Request }) => {
     }
 
     const repoUrlsKeys = ["githubUrls", "github_urls", "repoUrls", "repo_urls", "urls"];
-    let githubUrls: string[] | undefined = undefined;
+    let githubUrls: unknown = undefined;
     for (const key of repoUrlsKeys) {
       if (body[key]) {
-        githubUrls = body[key] as string[];
+        githubUrls = normalizeStringList(body[key]);
         break;
       }
       const paramVal = url.searchParams.get(key);
       if (paramVal) {
-        githubUrls = paramVal
-          .split(",")
-          .map((u) => u.trim())
-          .filter(Boolean);
+        githubUrls = normalizeStringList(paramVal);
         break;
       }
     }
@@ -306,11 +497,6 @@ const handleJudge = async ({ request }: { request: Request }) => {
       }
     }
 
-    // Default the description if still not provided
-    if (!description || typeof description !== "string" || !description.trim()) {
-      description = "General codebase quality and architectural audit.";
-    }
-
     const hackathonBrief =
       (body["hackathonBrief"] as string | undefined) ||
       (body["brief"] as string | undefined) ||
@@ -332,13 +518,20 @@ const handleJudge = async ({ request }: { request: Request }) => {
       sandbox = url.searchParams.get("sandbox") === "true";
     }
 
-    let requestedAgentSlugs = body["agents"] as string[] | undefined;
-    if (!requestedAgentSlugs && url.searchParams.has("agents")) {
-      const agentsParam = url.searchParams.get("agents");
-      requestedAgentSlugs = agentsParam ? agentsParam.split(",") : undefined;
+    let requestedAgentSlugs = normalizeStringList(body["agents"]);
+    if (requestedAgentSlugs === undefined && url.searchParams.has("agents")) {
+      requestedAgentSlugs = normalizeStringList(url.searchParams.get("agents"));
     }
 
     let txHash = (body["txHash"] as string | undefined) || url.searchParams.get("txHash");
+
+    const validationResponse = await validateAuditRequest({
+      githubUrl,
+      githubUrls,
+      description,
+      requestedAgentSlugs,
+    });
+    if (validationResponse) return validationResponse;
 
     // Extract txHash from standard x402 headers if not in body/query params
     if (!txHash) {
@@ -433,7 +626,9 @@ const handleJudge = async ({ request }: { request: Request }) => {
     const defaultSlugs = ["vex-01", "kael-02", "oryn-03", "zera-04"];
     const targetAgentSlugs =
       Array.isArray(requestedAgentSlugs) && requestedAgentSlugs.length > 0
-        ? requestedAgentSlugs.filter((slug) => defaultSlugs.includes(slug))
+        ? requestedAgentSlugs.filter(
+            (slug): slug is string => typeof slug === "string" && defaultSlugs.includes(slug),
+          )
         : defaultSlugs;
 
     if (targetAgentSlugs.length === 0) {
@@ -694,98 +889,6 @@ const handleJudge = async ({ request }: { request: Request }) => {
             { status: 400 },
           );
         }
-      }
-    }
-
-    // Validate repository count and project description AFTER payment is confirmed, but BEFORE starting evaluations.
-    if (urlsToAudit.length === 0) {
-      const isGet = request.method.toUpperCase() === "GET";
-      const hasQueryParams = url.searchParams.size > 0;
-      if (isGet && !hasQueryParams) {
-        return Response.json({
-          ok: true,
-          message:
-            "Hello! I am JuriXAI Auditor (Agent ID #4964), your autonomous multi-agent repository quality auditor.\n\n" +
-            "I can audit any public GitHub repository under 4 dimensions:\n" +
-            "1. Code Quality & Implementation (Agent Vex)\n" +
-            "2. Product Design & UX (Agent Kael)\n" +
-            "3. Innovation & Originality (Agent Oryn)\n" +
-            "4. Completeness & Execution (Agent Zera)\n\n" +
-            "To trigger an audit, please provide a public GitHub URL and a brief description of your project.\n" +
-            'Example request: { "githubUrl": "https://github.com/owner/repo", "description": "My project description" }.\n\n' +
-            "Note: Free evaluations are available by adding the `sandbox=true` parameter or key.",
-        });
-      }
-      return Response.json(
-        {
-          ok: false,
-          error:
-            "No valid repository URL provided. Please provide a public GitHub repository URL using the 'githubUrl' parameter.",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!description || typeof description !== "string" || !description.trim()) {
-      return Response.json(
-        {
-          ok: false,
-          error:
-            "Project description is required. Please describe the purpose of the codebase and key features to help agents gain accurate context.",
-        },
-        { status: 400 },
-      );
-    }
-
-    // Validate repository URLs and check accessibility AFTER payment is confirmed,
-    // but BEFORE starting the evaluations.
-    for (const urlToAudit of urlsToAudit) {
-      const repoRef = parseGitHubRepo(urlToAudit);
-      if (!repoRef) {
-        return Response.json(
-          {
-            ok: false,
-            error: `Invalid GitHub repository URL: ${urlToAudit}. Must be a valid public GitHub repository URL.`,
-          },
-          { status: 400 },
-        );
-      }
-
-      try {
-        const checkUrl = `https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`;
-        const response = await fetch(checkUrl, {
-          headers: {
-            accept: "application/vnd.github+json",
-            "user-agent": "jurixai-judge-bot",
-            ...(process.env.GITHUB_TOKEN?.trim()
-              ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` }
-              : {}),
-          },
-        });
-        if (!response.ok) {
-          if (response.status === 404) {
-            return Response.json(
-              { ok: false, error: `GitHub repository is private or does not exist: ${urlToAudit}` },
-              { status: 404 },
-            );
-          } else {
-            return Response.json(
-              {
-                ok: false,
-                error: `GitHub repository is inaccessible (Status ${response.status}): ${urlToAudit}`,
-              },
-              { status: response.status },
-            );
-          }
-        }
-      } catch (err) {
-        return Response.json(
-          {
-            ok: false,
-            error: `Failed to verify repository accessibility: ${err instanceof Error ? err.message : String(err)}`,
-          },
-          { status: 502 },
-        );
       }
     }
 
